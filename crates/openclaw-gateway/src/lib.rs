@@ -1,0 +1,65 @@
+pub mod auth;
+pub mod provider;
+pub mod routes;
+pub mod state;
+pub mod ws;
+
+use axum::middleware;
+use axum::routing::get;
+use axum::Router;
+use openclaw_core::config::{AuthMode, BindMode};
+use openclaw_core::AppConfig;
+use state::AppState;
+use tower_http::cors::CorsLayer;
+use tower_http::trace::TraceLayer;
+use tracing::info;
+
+pub async fn start_gateway(config: AppConfig) -> openclaw_core::Result<()> {
+    if config.gateway.verbose {
+        tracing_subscriber::fmt()
+            .with_env_filter("openclaw=debug,tower_http=debug")
+            .init();
+    } else {
+        tracing_subscriber::fmt()
+            .with_env_filter("openclaw=info")
+            .init();
+    }
+
+    let port = config.gateway.port;
+    let bind_addr = match config.gateway.bind {
+        BindMode::Loopback => "127.0.0.1",
+        BindMode::All => "0.0.0.0",
+    };
+
+    let needs_auth = !matches!(config.gateway.auth.mode, AuthMode::None);
+    let state = AppState::new(config);
+
+    let mut app = Router::new()
+        .route("/ws", get(ws::ws_handler))
+        .merge(routes::api_router());
+
+    if needs_auth {
+        app = app.layer(middleware::from_fn_with_state(
+            state.clone(),
+            auth::auth_middleware,
+        ));
+    }
+
+    let app = app
+        .layer(CorsLayer::permissive())
+        .layer(TraceLayer::new_for_http())
+        .with_state(state);
+
+    let addr = format!("{bind_addr}:{port}");
+    let listener = tokio::net::TcpListener::bind(&addr)
+        .await
+        .map_err(openclaw_core::OpenClawError::Io)?;
+
+    info!("🦞 OpenClaw Gateway v{} listening on ws://{}", env!("CARGO_PKG_VERSION"), addr);
+
+    axum::serve(listener, app)
+        .await
+        .map_err(openclaw_core::OpenClawError::Io)?;
+
+    Ok(())
+}

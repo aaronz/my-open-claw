@@ -1,0 +1,28 @@
+[package]
+name = "openclaw-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "CLI for OpenClaw personal AI assistant"
+
+[[bin]]
+name = "openclaw"
+path = "src/main.rs"
+
+[dependencies]
+openclaw-core = { workspace = true }
+openclaw-gateway = { workspace = true }
+clap = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+colored = { workspace = true }
+dialoguer = { workspace = true }
+directories = { workspace = true }
+tokio-tungstenite = { workspace = true }
+futures = { workspace = true }
+uuid = { workspace = true }

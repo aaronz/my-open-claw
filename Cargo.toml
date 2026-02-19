@@ -1,0 +1,52 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/openclaw-core",
+    "crates/openclaw-gateway",
+    "crates/openclaw-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/openclaw/openclaw"
+
+[workspace.dependencies]
+openclaw-core = { path = "crates/openclaw-core" }
+openclaw-gateway = { path = "crates/openclaw-gateway" }
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Web framework + WebSocket
+axum = { version = "0.8", features = ["ws"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Utilities
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "2"
+anyhow = "1"
+dashmap = "6"
+futures = "0.3"
+async-trait = "0.1"
+directories = "6"
+dialoguer = "0.11"
+colored = "3"
+reqwest = { version = "0.12", features = ["json", "stream"] }
+tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
+tempfile = "3"
