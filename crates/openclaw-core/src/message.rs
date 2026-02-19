@@ -22,6 +22,11 @@ pub enum WsMessage {
         channel: Option<ChannelKind>,
         peer_id: Option<String>,
     },
+    ChatCommand {
+        session_id: Uuid,
+        command: String,
+        args: Option<String>,
+    },
     GetSessions,
     GetConfig,
     NewMessage {
@@ -33,6 +38,11 @@ pub enum WsMessage {
     },
     ConfigResponse {
         config: AppConfig,
+    },
+    CommandResult {
+        session_id: Uuid,
+        command: String,
+        result: String,
     },
     Error {
         code: String,

@@ -92,6 +92,19 @@ async fn handle_text_message(
             }
             return None;
         }
+        WsMessage::ChatCommand {
+            session_id,
+            command,
+            args,
+        } => {
+            let result = handle_chat_command(state, &session_id, &command, args.as_deref());
+            return serde_json::to_string(&WsMessage::CommandResult {
+                session_id,
+                command,
+                result,
+            })
+            .ok();
+        }
         WsMessage::SendMessage {
             session_id,
             content,
@@ -131,7 +144,7 @@ async fn handle_text_message(
             let sid = session.id;
             let spawn_state = Arc::clone(state);
             let model = state.config.models.default_model.clone();
-            let system_prompt = state.config.agent.system_prompt.clone();
+            let system_prompt = state.effective_system_prompt();
             let max_tokens = state.config.agent.max_tokens;
 
             tokio::spawn(async move {
@@ -229,4 +242,52 @@ async fn handle_text_message(
     };
 
     serde_json::to_string(&response).ok()
+}
+
+fn handle_chat_command(
+    state: &Arc<AppState>,
+    session_id: &Uuid,
+    command: &str,
+    args: Option<&str>,
+) -> String {
+    match command {
+        "new" | "reset" => {
+            match state.sessions.reset(session_id) {
+                Ok(()) => "Session reset.".to_string(),
+                Err(e) => format!("Failed: {e}"),
+            }
+        }
+        "status" => {
+            match state.sessions.get(session_id) {
+                Some(session) => {
+                    let msg_count = session.messages.len();
+                    let model = &state.config.models.default_model;
+                    format!("Model: {model} | Messages: {msg_count} | Thinking: {:?}", state.config.agent.thinking)
+                }
+                None => "Session not found.".to_string(),
+            }
+        }
+        "think" => {
+            let level = args.unwrap_or("medium");
+            format!("Thinking level set to: {level} (per-session override not yet supported, config-level is {:?})", state.config.agent.thinking)
+        }
+        "compact" => {
+            match state.sessions.get(session_id) {
+                Some(session) => {
+                    let msg_count = session.messages.len();
+                    format!("Session has {msg_count} messages. Context compaction not yet implemented.")
+                }
+                None => "Session not found.".to_string(),
+            }
+        }
+        "verbose" => {
+            let on = args.map(|a| a == "on").unwrap_or(false);
+            format!("Verbose mode: {}", if on { "on" } else { "off" })
+        }
+        "usage" => {
+            let mode = args.unwrap_or("tokens");
+            format!("Usage mode: {mode}")
+        }
+        _ => format!("Unknown command: /{command}"),
+    }
 }
