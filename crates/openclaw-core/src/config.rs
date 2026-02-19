@@ -13,6 +13,8 @@ pub struct AppConfig {
     pub agent: AgentConfig,
     #[serde(default)]
     pub models: ModelsConfig,
+    #[serde(default)]
+    pub workspace: WorkspaceConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -117,6 +119,29 @@ fn default_model() -> String {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkspaceConfig {
+    #[serde(default = "default_workspace_path")]
+    pub path: String,
+}
+
+fn default_workspace_path() -> String {
+    let home = dirs_home().unwrap_or_else(|| ".".to_string());
+    format!("{}/.openclaw/workspace", home)
+}
+
+fn dirs_home() -> Option<String> {
+    directories::BaseDirs::new().map(|d| d.home_dir().to_string_lossy().to_string())
+}
+
+impl Default for WorkspaceConfig {
+    fn default() -> Self {
+        Self {
+            path: default_workspace_path(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderConfig {
     pub name: String,
     pub model: String,
@@ -131,6 +156,7 @@ impl Default for AppConfig {
             channels: ChannelsConfig::default(),
             agent: AgentConfig::default(),
             models: ModelsConfig::default(),
+            workspace: WorkspaceConfig::default(),
         }
     }
 }

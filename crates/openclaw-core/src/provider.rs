@@ -1,8 +1,29 @@
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 
 use crate::error::Result;
 use crate::session::ChatMessage;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolDefinition {
+    pub name: String,
+    pub description: String,
+    pub parameters: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolCall {
+    pub id: String,
+    pub name: String,
+    pub arguments: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolResult {
+    pub tool_call_id: String,
+    pub content: String,
+}
 
 /// Trait for AI model providers (Anthropic, OpenAI, etc.)
 #[async_trait]
