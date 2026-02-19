@@ -132,6 +132,8 @@ mod tests {
             content: "hello".to_string(),
             timestamp: chrono::Utc::now(),
             channel: ChannelKind::Cli,
+            tool_calls: vec![],
+            tool_result: None,
         };
         store.add_message(&session.id, msg).unwrap();
         let updated = store.get(&session.id).unwrap();

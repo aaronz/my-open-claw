@@ -32,20 +32,63 @@ impl Provider for AnthropicProvider {
         system_prompt: Option<&str>,
         model: &str,
         max_tokens: Option<u32>,
+        tools: Option<&[openclaw_core::provider::ToolDefinition]>,
         token_tx: mpsc::Sender<String>,
-    ) -> Result<String> {
+    ) -> Result<openclaw_core::provider::CompletionResponse> {
         let api_messages: Vec<Value> = messages
             .iter()
             .filter(|m| m.role != Role::System)
-            .map(|m| {
-                json!({
-                    "role": match m.role {
-                        Role::User => "user",
-                        Role::Assistant => "assistant",
-                        Role::System => "user",
-                    },
+            .map(|m| match m.role {
+                Role::User => json!({
+                    "role": "user",
                     "content": m.content,
-                })
+                }),
+                Role::Assistant => {
+                    if !m.tool_calls.is_empty() {
+                        let mut content: Vec<Value> = Vec::new();
+                        if !m.content.is_empty() {
+                            content.push(json!({
+                                "type": "text",
+                                "text": m.content
+                            }));
+                        }
+                        for tc in &m.tool_calls {
+                            content.push(json!({
+                                "type": "tool_use",
+                                "id": tc.id,
+                                "name": tc.name,
+                                "input": tc.arguments
+                            }));
+                        }
+                        json!({
+                            "role": "assistant",
+                            "content": content
+                        })
+                    } else {
+                        json!({
+                            "role": "assistant",
+                            "content": m.content
+                        })
+                    }
+                }
+                Role::Tool => {
+                    if let Some(tr) = &m.tool_result {
+                        json!({
+                            "role": "user",
+                            "content": [{
+                                "type": "tool_result",
+                                "tool_use_id": tr.tool_call_id,
+                                "content": tr.content
+                            }]
+                        })
+                    } else {
+                        json!({
+                            "role": "user",
+                            "content": m.content
+                        })
+                    }
+                }
+                Role::System => json!({ "role": "user", "content": "" }),
             })
             .collect();
 
@@ -58,6 +101,20 @@ impl Provider for AnthropicProvider {
 
         if let Some(sp) = system_prompt {
             body["system"] = json!(sp);
+        }
+
+        if let Some(tools) = tools {
+            let anthropic_tools: Vec<Value> = tools
+                .iter()
+                .map(|t| {
+                    json!({
+                        "name": t.name,
+                        "description": t.description,
+                        "input_schema": t.parameters
+                    })
+                })
+                .collect();
+            body["tools"] = json!(anthropic_tools);
         }
 
         let response = self
@@ -83,6 +140,11 @@ impl Provider for AnthropicProvider {
         }
 
         let mut full_response = String::new();
+        let mut tool_calls = Vec::new();
+        let mut current_tool_id: Option<String> = None;
+        let mut current_tool_name: Option<String> = None;
+        let mut current_tool_input = String::new();
+
         let mut stream = response.bytes_stream();
         let mut buffer = String::new();
 
@@ -97,11 +159,51 @@ impl Provider for AnthropicProvider {
                 for line in event_block.lines() {
                     if let Some(data) = line.strip_prefix("data: ") {
                         if let Ok(parsed) = serde_json::from_str::<Value>(data) {
-                            if parsed["type"] == "content_block_delta" {
-                                if let Some(text) = parsed["delta"]["text"].as_str() {
-                                    full_response.push_str(text);
-                                    let _ = token_tx.send(text.to_string()).await;
+                            match parsed["type"].as_str() {
+                                Some("content_block_start") => {
+                                    if parsed["content_block"]["type"] == "tool_use" {
+                                        current_tool_id = parsed["content_block"]["id"]
+                                            .as_str()
+                                            .map(String::from);
+                                        current_tool_name = parsed["content_block"]["name"]
+                                            .as_str()
+                                            .map(String::from);
+                                        current_tool_input.clear();
+                                    }
                                 }
+                                Some("content_block_delta") => {
+                                    if let Some(delta) = parsed.get("delta") {
+                                        if delta["type"] == "text_delta" {
+                                            if let Some(text) = delta["text"].as_str() {
+                                                full_response.push_str(text);
+                                                let _ = token_tx.send(text.to_string()).await;
+                                            }
+                                        } else if delta["type"] == "input_json_delta" {
+                                            if let Some(partial) = delta["partial_json"].as_str() {
+                                                current_tool_input.push_str(partial);
+                                            }
+                                        }
+                                    }
+                                }
+                                Some("content_block_stop") => {
+                                    if let (Some(id), Some(name)) =
+                                        (&current_tool_id, &current_tool_name)
+                                    {
+                                        if let Ok(args) =
+                                            serde_json::from_str(&current_tool_input)
+                                        {
+                                            tool_calls.push(openclaw_core::provider::ToolCall {
+                                                id: id.clone(),
+                                                name: name.clone(),
+                                                arguments: args,
+                                            });
+                                        }
+                                        current_tool_id = None;
+                                        current_tool_name = None;
+                                        current_tool_input.clear();
+                                    }
+                                }
+                                _ => {}
                             }
                         }
                     }
@@ -109,19 +211,63 @@ impl Provider for AnthropicProvider {
             }
         }
 
+        // Process any remaining data in the buffer
         for line in buffer.lines() {
             if let Some(data) = line.strip_prefix("data: ") {
                 if let Ok(parsed) = serde_json::from_str::<Value>(data) {
-                    if parsed["type"] == "content_block_delta" {
-                        if let Some(text) = parsed["delta"]["text"].as_str() {
-                            full_response.push_str(text);
-                            let _ = token_tx.send(text.to_string()).await;
+                    match parsed["type"].as_str() {
+                        Some("content_block_start") => {
+                            if parsed["content_block"]["type"] == "tool_use" {
+                                current_tool_id = parsed["content_block"]["id"]
+                                    .as_str()
+                                    .map(String::from);
+                                current_tool_name = parsed["content_block"]["name"]
+                                    .as_str()
+                                    .map(String::from);
+                                current_tool_input.clear();
+                            }
                         }
+                        Some("content_block_delta") => {
+                            if let Some(delta) = parsed.get("delta") {
+                                if delta["type"] == "text_delta" {
+                                    if let Some(text) = delta["text"].as_str() {
+                                        full_response.push_str(text);
+                                        let _ = token_tx.send(text.to_string()).await;
+                                    }
+                                } else if delta["type"] == "input_json_delta" {
+                                    if let Some(partial) = delta["partial_json"].as_str() {
+                                        current_tool_input.push_str(partial);
+                                    }
+                                }
+                            }
+                        }
+                        Some("content_block_stop") => {
+                            if let (Some(id), Some(name)) =
+                                (&current_tool_id, &current_tool_name)
+                            {
+                                if let Ok(args) =
+                                    serde_json::from_str(&current_tool_input)
+                                {
+                                    tool_calls.push(openclaw_core::provider::ToolCall {
+                                        id: id.clone(),
+                                        name: name.clone(),
+                                        arguments: args,
+                                    });
+                                }
+                                current_tool_id = None;
+                                current_tool_name = None;
+                                current_tool_input.clear();
+                            }
+                        }
+                        _ => {}
                     }
                 }
             }
         }
 
-        Ok(full_response)
+        Ok(openclaw_core::provider::CompletionResponse {
+            content: full_response,
+            tool_calls,
+        })
     }
 }

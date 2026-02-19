@@ -25,6 +25,12 @@ pub struct ToolResult {
     pub content: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CompletionResponse {
+    pub content: String,
+    pub tool_calls: Vec<ToolCall>,
+}
+
 /// Trait for AI model providers (Anthropic, OpenAI, etc.)
 #[async_trait]
 pub trait Provider: Send + Sync {
@@ -32,13 +38,14 @@ pub trait Provider: Send + Sync {
     fn name(&self) -> &str;
 
     /// Stream a chat completion. Tokens are sent through `token_tx` as they arrive.
-    /// Returns the full accumulated response text when complete.
+    /// Returns the full completion response when complete.
     async fn stream_chat(
         &self,
         messages: &[ChatMessage],
         system_prompt: Option<&str>,
         model: &str,
         max_tokens: Option<u32>,
+        tools: Option<&[ToolDefinition]>,
         token_tx: mpsc::Sender<String>,
-    ) -> Result<String>;
+    ) -> Result<CompletionResponse>;
 }

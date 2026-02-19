@@ -130,6 +130,8 @@ async fn handle_text_message(
                 content: content.clone(),
                 timestamp: chrono::Utc::now(),
                 channel: ch.clone(),
+                tool_calls: vec![],
+                tool_result: None,
             };
             let _ = state.sessions.add_message(&session.id, user_msg.clone());
 
@@ -154,82 +156,152 @@ async fn handle_text_message(
                     spawn_state.send_to_subscribers(&sid, &json);
                 }
 
-                let session_messages = spawn_state
-                    .sessions
-                    .get(&sid)
-                    .map(|s| s.messages.clone())
-                    .unwrap_or_default();
+                if spawn_state.provider.is_none() {
+                    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                    let content = format!(
+                        "I received your message: \"{content}\". \
+                         No AI provider configured — run `openclaw onboard` to set one up."
+                    );
 
-                let response_content = match &spawn_state.provider {
-                    Some(provider) => {
-                        let (token_tx, mut token_rx) = mpsc::channel::<String>(256);
+                    let assistant_msg = ChatMessage {
+                        id: Uuid::new_v4(),
+                        role: Role::Assistant,
+                        content: content.clone(),
+                        timestamp: chrono::Utc::now(),
+                        channel: ch,
+                        tool_calls: vec![],
+                        tool_result: None,
+                    };
+                    let _ = spawn_state.sessions.add_message(&sid, assistant_msg);
 
-                        let stream_state = Arc::clone(&spawn_state);
-                        let stream_sid = sid;
-                        let stream_task = tokio::spawn(async move {
-                            while let Some(token) = token_rx.recv().await {
-                                if let Ok(json) =
-                                    serde_json::to_string(&WsMessage::AgentResponse {
-                                        session_id: stream_sid,
-                                        content: token,
-                                        done: false,
-                                    })
-                                {
-                                    stream_state.send_to_subscribers(&stream_sid, &json);
-                                }
-                            }
-                        });
+                    if let Ok(json) = serde_json::to_string(&WsMessage::AgentResponse {
+                        session_id: sid,
+                        content,
+                        done: true,
+                    }) {
+                        spawn_state.send_to_subscribers(&sid, &json);
+                    }
+                    return;
+                }
 
-                        let result = provider
-                            .stream_chat(
-                                &session_messages,
-                                system_prompt.as_deref(),
-                                &model,
-                                max_tokens,
-                                token_tx,
-                            )
-                            .await;
+                let provider = spawn_state.provider.as_ref().unwrap();
 
-                        let _ = stream_task.await;
+                // Max turns loop
+                for _turn in 0..5 {
+                    let session_messages = spawn_state
+                        .sessions
+                        .get(&sid)
+                        .map(|s| s.messages.clone())
+                        .unwrap_or_default();
 
-                        match result {
-                            Ok(full) => full,
-                            Err(e) => {
-                                error!(error = %e, "provider error");
-                                if let Ok(json) = serde_json::to_string(&WsMessage::Error {
-                                    code: "provider_error".to_string(),
-                                    message: e.to_string(),
-                                }) {
-                                    spawn_state.send_to_subscribers(&sid, &json);
-                                }
-                                return;
+                    let (token_tx, mut token_rx) = mpsc::channel::<String>(256);
+
+                    let stream_state = Arc::clone(&spawn_state);
+                    let stream_sid = sid;
+                    let stream_task = tokio::spawn(async move {
+                        while let Some(token) = token_rx.recv().await {
+                            if let Ok(json) = serde_json::to_string(&WsMessage::AgentResponse {
+                                session_id: stream_sid,
+                                content: token,
+                                done: false,
+                            }) {
+                                stream_state.send_to_subscribers(&stream_sid, &json);
                             }
                         }
-                    }
-                    None => {
-                        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-                        format!(
-                            "I received your message: \"{content}\". \
-                             No AI provider configured — run `openclaw onboard` to set one up."
+                    });
+
+                    let tools: Vec<openclaw_core::provider::ToolDefinition> = spawn_state
+                        .tools
+                        .values()
+                        .map(|t| t.definition())
+                        .collect();
+                    let tools_slice = if tools.is_empty() {
+                        None
+                    } else {
+                        Some(tools.as_slice())
+                    };
+
+                    let result = provider
+                        .stream_chat(
+                            &session_messages,
+                            system_prompt.as_deref(),
+                            &model,
+                            max_tokens,
+                            tools_slice,
+                            token_tx,
                         )
+                        .await;
+
+                    let _ = stream_task.await;
+
+                    match result {
+                        Ok(resp) => {
+                            let assistant_msg = ChatMessage {
+                                id: Uuid::new_v4(),
+                                role: Role::Assistant,
+                                content: resp.content.clone(),
+                                timestamp: chrono::Utc::now(),
+                                channel: ch.clone(),
+                                tool_calls: resp.tool_calls.clone(),
+                                tool_result: None,
+                            };
+                            let _ = spawn_state.sessions.add_message(&sid, assistant_msg);
+
+                            if resp.tool_calls.is_empty() {
+                                if let Ok(json) =
+                                    serde_json::to_string(&WsMessage::AgentResponse {
+                                        session_id: sid,
+                                        content: String::new(),
+                                        done: true,
+                                    })
+                                {
+                                    spawn_state.send_to_subscribers(&sid, &json);
+                                }
+                                break;
+                            }
+
+                            if let Ok(json) = serde_json::to_string(&WsMessage::AgentThinking {
+                                session_id: sid,
+                            }) {
+                                spawn_state.send_to_subscribers(&sid, &json);
+                            }
+
+                            for tc in resp.tool_calls {
+                                let output = if let Some(tool) = spawn_state.tools.get(&tc.name) {
+                                    match tool.execute(tc.arguments.clone()).await {
+                                        Ok(s) => s,
+                                        Err(e) => format!("Error: {e}"),
+                                    }
+                                } else {
+                                    format!("Error: Tool not found: {}", tc.name)
+                                };
+
+                                let tool_msg = ChatMessage {
+                                    id: Uuid::new_v4(),
+                                    role: Role::Tool,
+                                    content: String::new(),
+                                    timestamp: chrono::Utc::now(),
+                                    channel: ch.clone(),
+                                    tool_calls: vec![],
+                                    tool_result: Some(openclaw_core::provider::ToolResult {
+                                        tool_call_id: tc.id,
+                                        content: output,
+                                    }),
+                                };
+                                let _ = spawn_state.sessions.add_message(&sid, tool_msg);
+                            }
+                        }
+                        Err(e) => {
+                            error!(error = %e, "provider error");
+                            if let Ok(json) = serde_json::to_string(&WsMessage::Error {
+                                code: "provider_error".to_string(),
+                                message: e.to_string(),
+                            }) {
+                                spawn_state.send_to_subscribers(&sid, &json);
+                            }
+                            break;
+                        }
                     }
-                };
-
-                let assistant_msg = ChatMessage {
-                    id: Uuid::new_v4(),
-                    role: Role::Assistant,
-                    content: response_content.clone(),
-                    timestamp: chrono::Utc::now(),
-                    channel: ch,
-                };
-                let _ = spawn_state.sessions.add_message(&sid, assistant_msg);
-
-                if let Ok(json) = serde_json::to_string(&WsMessage::AgentResponse {
-                    session_id: sid,
-                    content: response_content,
-                    done: true,
-                }) {
-                    spawn_state.send_to_subscribers(&sid, &json);
                 }
             });
 

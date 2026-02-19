@@ -1,5 +1,6 @@
 use crate::channel::ChannelKind;
 use crate::error::{OpenClawError, Result};
+use crate::provider::{ToolCall, ToolResult};
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
@@ -23,6 +24,10 @@ pub struct ChatMessage {
     pub id: Uuid,
     pub role: Role,
     pub content: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tool_calls: Vec<ToolCall>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_result: Option<ToolResult>,
     pub timestamp: DateTime<Utc>,
     pub channel: ChannelKind,
 }
@@ -33,6 +38,7 @@ pub enum Role {
     User,
     Assistant,
     System,
+    Tool,
 }
 
 pub struct SessionStore {

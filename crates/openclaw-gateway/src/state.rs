@@ -1,13 +1,14 @@
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use openclaw_core::provider::Provider;
-use openclaw_core::{AppConfig, SessionStore};
-use std::collections::HashSet;
+use openclaw_core::{AppConfig, SessionStore, Tool};
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
 use crate::provider::create_provider;
+use crate::tools::default_tools;
 
 pub struct AppState {
     pub config: AppConfig,
@@ -15,6 +16,7 @@ pub struct AppState {
     pub ws_clients: DashMap<Uuid, broadcast::Sender<String>>,
     pub subscriptions: DashMap<Uuid, HashSet<Uuid>>,
     pub provider: Option<Arc<dyn Provider>>,
+    pub tools: HashMap<String, Box<dyn Tool>>,
     pub workspace_prompt: Option<String>,
     pub start_time: DateTime<Utc>,
 }
@@ -38,12 +40,15 @@ impl AppState {
         let sessions = SessionStore::with_persistence(sessions_dir)
             .unwrap_or_else(|_| SessionStore::new());
 
+        let tools = default_tools();
+
         Arc::new(Self {
             config,
             sessions,
             ws_clients: DashMap::new(),
             subscriptions: DashMap::new(),
             provider,
+            tools,
             workspace_prompt,
             start_time: Utc::now(),
         })
@@ -57,12 +62,15 @@ impl AppState {
             .first()
             .and_then(|p| create_provider(p));
 
+        let tools = default_tools();
+
         Arc::new(Self {
             config,
             sessions: SessionStore::new(),
             ws_clients: DashMap::new(),
             subscriptions: DashMap::new(),
             provider,
+            tools,
             workspace_prompt: None,
             start_time: Utc::now(),
         })
