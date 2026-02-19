@@ -1,7 +1,14 @@
+use crate::agent::run_agent_cycle;
 use crate::state::AppState;
-use axum::{extract::State, routing::{get, post}, Json, Router};
+use axum::{
+    extract::State,
+    routing::{get, post},
+    Json, Router,
+};
+use openclaw_core::session::{ChatMessage, Role};
 use serde_json::{json, Value};
 use std::sync::Arc;
+use uuid::Uuid;
 
 pub fn api_router() -> Router<Arc<AppState>> {
     Router::new()
@@ -45,29 +52,56 @@ async fn webhook(
 ) -> Json<Value> {
     let source = body["source"].as_str().unwrap_or("unknown");
     let content = body["content"].as_str().unwrap_or("");
-    let channel = body["channel"].as_str().unwrap_or("api");
+    let channel_str = body["channel"].as_str().unwrap_or("api");
     let peer_id = body["peer_id"].as_str().unwrap_or("webhook");
 
     if content.is_empty() {
         return Json(json!({ "error": "content is required" }));
     }
 
-    let msg = openclaw_core::WsMessage::SendMessage {
-        session_id: None,
-        content: content.to_string(),
-        channel: None,
-        peer_id: Some(format!("{channel}:{peer_id}")),
-    };
+    let channel_kind: openclaw_core::ChannelKind =
+        serde_json::from_value(json!(channel_str)).unwrap_or(openclaw_core::ChannelKind::Api);
 
-    if let Ok(json_msg) = serde_json::to_string(&msg) {
-        state.broadcast(&json_msg);
+    let session = state
+        .sessions
+        .get_or_create(channel_kind.clone(), peer_id);
+    let session_id = session.id;
+
+    let user_msg = ChatMessage {
+        id: Uuid::new_v4(),
+        role: Role::User,
+        content: content.to_string(),
+        timestamp: chrono::Utc::now(),
+        channel: channel_kind,
+        tool_calls: vec![],
+        tool_result: None,
+    };
+    let _ = state.sessions.add_message(&session_id, user_msg.clone());
+
+    let new_msg = openclaw_core::WsMessage::NewMessage {
+        session_id,
+        message: user_msg,
+    };
+    if let Ok(json_msg) = serde_json::to_string(&new_msg) {
+        state.send_to_subscribers(&session_id, &json_msg);
     }
 
-    tracing::info!(source = source, channel = channel, "webhook received");
+    tracing::info!(
+        source = source,
+        channel = channel_str,
+        session_id = %session_id,
+        "webhook received, triggering agent"
+    );
+
+    let spawn_state = Arc::clone(&state);
+    tokio::spawn(async move {
+        run_agent_cycle(spawn_state, session_id).await;
+    });
 
     Json(json!({
         "status": "accepted",
         "source": source,
+        "session_id": session_id
     }))
 }
 
