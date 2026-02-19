@@ -7,7 +7,7 @@ mod tests {
 
     async fn spawn_test_gateway() -> u16 {
         let config = AppConfig::default();
-        let state = openclaw_gateway::state::AppState::new(config);
+        let state = openclaw_gateway::state::AppState::new_ephemeral(config);
 
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();

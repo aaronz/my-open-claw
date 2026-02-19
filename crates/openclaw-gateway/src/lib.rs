@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod cron;
 pub mod provider;
 pub mod routes;
 pub mod state;

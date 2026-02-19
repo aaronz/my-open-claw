@@ -15,11 +15,42 @@ pub struct AppState {
     pub ws_clients: DashMap<Uuid, broadcast::Sender<String>>,
     pub subscriptions: DashMap<Uuid, HashSet<Uuid>>,
     pub provider: Option<Arc<dyn Provider>>,
+    pub workspace_prompt: Option<String>,
     pub start_time: DateTime<Utc>,
 }
 
 impl AppState {
     pub fn new(config: AppConfig) -> Arc<Self> {
+        let provider = config
+            .models
+            .providers
+            .first()
+            .and_then(|p| create_provider(p));
+
+        let workspace_prompt =
+            openclaw_core::workspace::load_prompt_files(&config.workspace.path);
+
+        let sessions_dir = std::path::PathBuf::from(&config.workspace.path)
+            .parent()
+            .unwrap_or(std::path::Path::new("."))
+            .join("sessions");
+
+        let sessions = SessionStore::with_persistence(sessions_dir)
+            .unwrap_or_else(|_| SessionStore::new());
+
+        Arc::new(Self {
+            config,
+            sessions,
+            ws_clients: DashMap::new(),
+            subscriptions: DashMap::new(),
+            provider,
+            workspace_prompt,
+            start_time: Utc::now(),
+        })
+    }
+
+    /// In-memory only — no disk persistence or workspace prompt loading.
+    pub fn new_ephemeral(config: AppConfig) -> Arc<Self> {
         let provider = config
             .models
             .providers
@@ -32,8 +63,18 @@ impl AppState {
             ws_clients: DashMap::new(),
             subscriptions: DashMap::new(),
             provider,
+            workspace_prompt: None,
             start_time: Utc::now(),
         })
+    }
+
+    pub fn effective_system_prompt(&self) -> Option<String> {
+        match (&self.config.agent.system_prompt, &self.workspace_prompt) {
+            (Some(sp), Some(wp)) => Some(format!("{sp}\n\n{wp}")),
+            (Some(sp), None) => Some(sp.clone()),
+            (None, Some(wp)) => Some(wp.clone()),
+            (None, None) => None,
+        }
     }
 
     pub fn broadcast(&self, msg: &str) {
