@@ -73,6 +73,7 @@ async fn webhook(
         content: content.to_string(),
         timestamp: chrono::Utc::now(),
         channel: channel_kind,
+        images: vec![],
         tool_calls: vec![],
         tool_result: None,
     };

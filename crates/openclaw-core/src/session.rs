@@ -25,6 +25,8 @@ pub struct ChatMessage {
     pub role: Role,
     pub content: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub images: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tool_calls: Vec<ToolCall>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_result: Option<ToolResult>,

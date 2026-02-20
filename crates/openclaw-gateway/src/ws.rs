@@ -131,6 +131,7 @@ async fn handle_text_message(
                 content: content.clone(),
                 timestamp: chrono::Utc::now(),
                 channel: ch.clone(),
+                images: vec![],
                 tool_calls: vec![],
                 tool_result: None,
             };

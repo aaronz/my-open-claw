@@ -119,6 +119,7 @@ impl Channel for TelegramChannel {
                                                 content: text.clone(),
                                                 timestamp: chrono::Utc::now(),
                                                 channel: channel_kind.clone(),
+                                                images: vec![],
                                                 tool_calls: vec![],
                                                 tool_result: None,
                                             };

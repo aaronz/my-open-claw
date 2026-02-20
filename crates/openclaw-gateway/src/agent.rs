@@ -39,6 +39,7 @@ pub async fn run_agent_cycle(state: Arc<AppState>, session_id: Uuid) {
             timestamp: Utc::now(),
             channel,
             tool_calls: vec![],
+            images: vec![],
             tool_result: None,
         };
         
@@ -140,6 +141,7 @@ pub async fn run_agent_cycle(state: Arc<AppState>, session_id: Uuid) {
                      timestamp: Utc::now(),
                      channel: channel.clone(),
                      tool_calls: resp.tool_calls.clone(),
+                     images: vec![],
                      tool_result: None,
                  };
                  let _ = state.sessions.add_message(&session_id, assistant_msg);
@@ -216,6 +218,7 @@ pub async fn run_agent_cycle(state: Arc<AppState>, session_id: Uuid) {
                           timestamp: Utc::now(),
                           channel: channel.clone(),
                           tool_calls: vec![],
+            images: vec![],
                           tool_result: Some(openclaw_core::provider::ToolResult {
                               tool_call_id: tc.id,
                               content: output,
@@ -269,6 +272,7 @@ pub async fn compact_session(state: Arc<AppState>, session_id: Uuid) -> Result<S
             timestamp: Utc::now(),
             channel: ChannelKind::Api,
             tool_calls: vec![],
+            images: vec![],
             tool_result: None,
         }];
         let model = &state.config.models.default_model;
@@ -283,6 +287,7 @@ pub async fn compact_session(state: Arc<AppState>, session_id: Uuid) -> Result<S
                     timestamp: Utc::now(),
                     channel: ChannelKind::Api,
                     tool_calls: vec![],
+            images: vec![],
                     tool_result: None,
                 };
                 if let Err(e) = state.sessions.compact(&session_id, compact_count, summary_msg) {

@@ -43,7 +43,7 @@ impl AppState {
         let sessions = SessionStore::with_persistence(sessions_dir)
             .unwrap_or_else(|_| SessionStore::new());
 
-        let tools = default_tools();
+        let tools = default_tools(&config);
 
         let memory = if config.memory.enabled {
             match MemoryService::new(&config).await {
@@ -79,7 +79,7 @@ impl AppState {
             .first()
             .and_then(|p| create_provider(p));
 
-        let tools = default_tools();
+        let tools = default_tools(&config);
 
         Arc::new(Self {
             config,

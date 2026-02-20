@@ -97,6 +97,7 @@ pub struct AgentConfig {
     #[serde(default)]
     pub thinking: ThinkingLevel,
     pub max_tokens: Option<u32>,
+    pub tavily_api_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -224,6 +225,7 @@ impl Default for AgentConfig {
             system_prompt: None,
             thinking: ThinkingLevel::Medium,
             max_tokens: None,
+            tavily_api_key: None,
         }
     }
 }

@@ -179,8 +179,22 @@ async fn connect_discord(
                                 let content = d["content"].as_str().unwrap_or("");
                                 let channel_id = d["channel_id"].as_str().unwrap_or("");
 
+                                let mut images = Vec::new();
+                                if let Some(attachments) = d["attachments"].as_array() {
+                                    for att in attachments {
+                                        if let Some(ctype) = att["content_type"].as_str() {
+                                            if ctype.starts_with("image/") {
+                                                if let Some(url) = att["url"].as_str() {
+                                                    images.push(url.to_string());
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
                                 if let Some(state) = state_weak.upgrade() {
-                                    let session = state.sessions.get_or_create(kind.clone(), channel_id);
+                                    let session =
+                                        state.sessions.get_or_create(kind.clone(), channel_id);
                                     let session_id = session.id;
                                     drop(session);
 
@@ -190,10 +204,13 @@ async fn connect_discord(
                                         content: content.to_string(),
                                         timestamp: chrono::Utc::now(),
                                         channel: kind.clone(),
+                                        images,
                                         tool_calls: vec![],
                                         tool_result: None,
                                     };
-                                    let _ = state.sessions.add_message(&session_id, user_msg.clone());
+                                    let _ = state
+                                        .sessions
+                                        .add_message(&session_id, user_msg.clone());
 
                                     let new_msg = WsMessage::NewMessage {
                                         session_id,

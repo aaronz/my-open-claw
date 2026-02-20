@@ -163,6 +163,7 @@ async fn connect_slack_socket(
                             content: text.to_string(),
                             timestamp: chrono::Utc::now(),
                             channel: kind.clone(),
+                            images: vec![],
                             tool_calls: vec![],
                             tool_result: None,
                         };

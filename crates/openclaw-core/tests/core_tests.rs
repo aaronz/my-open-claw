@@ -54,6 +54,7 @@ mod tests {
                 timestamp: chrono::Utc::now(),
                 channel: ChannelKind::Cli,
                 tool_calls: vec![],
+            images: vec![],
                 tool_result: None,
             };
             store.add_message(&session.id, msg).unwrap();
@@ -66,6 +67,7 @@ mod tests {
             timestamp: chrono::Utc::now(),
             channel: ChannelKind::Cli,
             tool_calls: vec![],
+            images: vec![],
             tool_result: None,
         };
 
@@ -171,6 +173,7 @@ mod tests {
             timestamp: chrono::Utc::now(),
             channel: ChannelKind::Cli,
             tool_calls: vec![],
+            images: vec![],
             tool_result: None,
         };
         store.add_message(&session.id, msg).unwrap();
