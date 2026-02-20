@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use openclaw_core::provider::Provider;
-use openclaw_core::{AppConfig, SessionStore, Tool};
+use openclaw_core::{AppConfig, Channel, ChannelKind, SessionStore, Tool};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::broadcast;
@@ -17,6 +17,7 @@ pub struct AppState {
     pub subscriptions: DashMap<Uuid, HashSet<Uuid>>,
     pub provider: Option<Arc<dyn Provider>>,
     pub tools: HashMap<String, Box<dyn Tool>>,
+    pub channels: DashMap<ChannelKind, Arc<dyn Channel>>,
     pub workspace_prompt: Option<String>,
     pub start_time: DateTime<Utc>,
 }
@@ -49,6 +50,7 @@ impl AppState {
             subscriptions: DashMap::new(),
             provider,
             tools,
+            channels: DashMap::new(),
             workspace_prompt,
             start_time: Utc::now(),
         })
@@ -71,6 +73,7 @@ impl AppState {
             subscriptions: DashMap::new(),
             provider,
             tools,
+            channels: DashMap::new(),
             workspace_prompt: None,
             start_time: Utc::now(),
         })

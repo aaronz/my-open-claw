@@ -1,5 +1,6 @@
 pub mod agent;
 pub mod auth;
+pub mod channels;
 pub mod cron;
 pub mod provider;
 pub mod routes;
@@ -7,12 +8,14 @@ pub mod state;
 pub mod tools;
 pub mod ws;
 
+use crate::channels::telegram::TelegramChannel;
 use axum::middleware;
 use axum::routing::get;
 use axum::Router;
 use openclaw_core::config::{AuthMode, BindMode};
-use openclaw_core::AppConfig;
+use openclaw_core::{AppConfig, Channel, ChannelKind};
 use state::AppState;
+use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 use tracing::info;
@@ -36,6 +39,26 @@ pub async fn start_gateway(config: AppConfig) -> openclaw_core::Result<()> {
 
     let needs_auth = !matches!(config.gateway.auth.mode, AuthMode::None);
     let state = AppState::new(config);
+
+    // Initialize Channels
+    if let Some(telegram_config) = &state.config.channels.telegram {
+        if telegram_config.enabled {
+            if let Some(token) = &telegram_config.token {
+                let channel = TelegramChannel::new(token.clone(), Arc::downgrade(&state));
+                match channel.start().await {
+                    Ok(_) => {
+                        info!("Telegram channel started");
+                        state
+                            .channels
+                            .insert(ChannelKind::Telegram, Arc::new(channel));
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to start Telegram channel: {}", e);
+                    }
+                }
+            }
+        }
+    }
 
     let mut app = Router::new()
         .route("/ws", get(ws::ws_handler))

@@ -127,6 +127,27 @@ pub async fn run_agent_cycle(state: Arc<AppState>, session_id: Uuid) {
                       }) {
                           state.send_to_subscribers(&session_id, &json);
                       }
+
+                      if let Some(chan) = state.channels.get(&channel) {
+                          let peer_id = {
+                              if let Some(s) = state.sessions.get(&session_id) {
+                                  s.peer_id.clone()
+                              } else {
+                                  // Session gone, can't reply
+                                  break;
+                              }
+                          };
+                          let chan_ref = chan.value().clone();
+                          drop(chan);
+                          let content = resp.content.clone();
+
+                          tokio::spawn(async move {
+                              if let Err(e) = chan_ref.send_message(&peer_id, &content).await {
+                                  error!("Failed to send to channel: {}", e);
+                              }
+                          });
+                      }
+
                       break;
                  }
                  
