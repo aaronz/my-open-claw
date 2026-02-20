@@ -1,4 +1,5 @@
 pub mod anthropic;
+pub mod gemini;
 pub mod openai;
 
 use openclaw_core::config::ProviderConfig;
@@ -14,6 +15,10 @@ pub fn create_provider(config: &ProviderConfig) -> Option<Arc<dyn Provider>> {
         "openai" | "gpt" => Some(Arc::new(openai::OpenAiProvider::new(
             api_key.clone(),
             config.base_url.clone(),
+        ))),
+        "gemini" | "google" => Some(Arc::new(gemini::GeminiProvider::new(
+            api_key.clone(),
+            config.model.clone(),
         ))),
         _ => {
             tracing::warn!("unknown provider: {}", config.name);
