@@ -8,6 +8,7 @@ pub mod state;
 pub mod tools;
 pub mod ws;
 
+use crate::channels::discord::DiscordChannel;
 use crate::channels::telegram::TelegramChannel;
 use axum::middleware;
 use axum::routing::get;
@@ -54,6 +55,25 @@ pub async fn start_gateway(config: AppConfig) -> openclaw_core::Result<()> {
                     }
                     Err(e) => {
                         tracing::error!("Failed to start Telegram channel: {}", e);
+                    }
+                }
+            }
+        }
+    }
+
+    if let Some(discord_config) = &state.config.channels.discord {
+        if discord_config.enabled {
+            if let Some(token) = &discord_config.token {
+                let channel = DiscordChannel::new(token.clone(), Arc::downgrade(&state));
+                match channel.start().await {
+                    Ok(_) => {
+                        info!("Discord channel started");
+                        state
+                            .channels
+                            .insert(ChannelKind::Discord, Arc::new(channel));
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to start Discord channel: {}", e);
                     }
                 }
             }

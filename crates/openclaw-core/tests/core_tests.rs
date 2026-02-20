@@ -43,6 +43,44 @@ mod tests {
     }
 
     #[test]
+    fn session_store_compact() {
+        let store = SessionStore::new();
+        let session = store.create(ChannelKind::Cli, "u1".to_string());
+        for i in 0..10 {
+            let msg = ChatMessage {
+                id: uuid::Uuid::new_v4(),
+                role: Role::User,
+                content: format!("msg {}", i),
+                timestamp: chrono::Utc::now(),
+                channel: ChannelKind::Cli,
+                tool_calls: vec![],
+                tool_result: None,
+            };
+            store.add_message(&session.id, msg).unwrap();
+        }
+
+        let summary = ChatMessage {
+            id: uuid::Uuid::new_v4(),
+            role: Role::System,
+            content: "summary".to_string(),
+            timestamp: chrono::Utc::now(),
+            channel: ChannelKind::Cli,
+            tool_calls: vec![],
+            tool_result: None,
+        };
+
+        // Compact: remove first 5 messages, replace with summary
+        store.compact(&session.id, 5, summary).unwrap();
+
+        let updated = store.get(&session.id).unwrap();
+        // Expected: summary + 5 messages (msg 5..9)
+        assert_eq!(updated.messages.len(), 6);
+        assert_eq!(updated.messages[0].content, "summary");
+        assert_eq!(updated.messages[1].content, "msg 5");
+        assert_eq!(updated.messages[5].content, "msg 9");
+    }
+
+    #[test]
     fn ws_message_deserialize_get_sessions() {
         let json = r#"{"type":"get_sessions"}"#;
         let msg: WsMessage = serde_json::from_str(json).unwrap();

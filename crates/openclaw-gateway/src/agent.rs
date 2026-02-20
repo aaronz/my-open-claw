@@ -196,3 +196,79 @@ pub async fn run_agent_cycle(state: Arc<AppState>, session_id: Uuid) {
         }
     }
 }
+
+pub async fn compact_session(state: Arc<AppState>, session_id: Uuid) -> Result<String, String> {
+    let session_opt = state.sessions.get(&session_id);
+    if session_opt.is_none() {
+        return Err("Session not found".to_string());
+    }
+    let session = session_opt.unwrap();
+    let msg_count = session.messages.len();
+    if msg_count < 10 {
+        return Ok("Session too short to compact.".to_string());
+    }
+
+    let keep_count = 5;
+    let compact_count = msg_count - keep_count;
+    let to_summarize: Vec<ChatMessage> = session
+        .messages
+        .iter()
+        .take(compact_count)
+        .cloned()
+        .collect();
+    drop(session);
+
+    let context_str = to_summarize
+        .iter()
+        .map(|m| format!("{:?}: {}", m.role, m.content))
+        .collect::<Vec<_>>()
+        .join("\n\n");
+
+    if let Some(provider) = &state.provider {
+        let (tx, _rx) = mpsc::channel(1);
+        let summary_prompt = "Summarize the following conversation history into a concise context summary. Focus on key facts, user preferences, and unresolved tasks.";
+
+        let msgs = vec![ChatMessage {
+            id: Uuid::new_v4(),
+            role: Role::User,
+            content: format!("{}\n\nConversation:\n{}", summary_prompt, context_str),
+            timestamp: Utc::now(),
+            channel: ChannelKind::Api,
+            tool_calls: vec![],
+            tool_result: None,
+        }];
+
+        let model = &state.config.models.default_model;
+
+        match provider
+            .stream_chat(&msgs, None, model, None, None, tx)
+            .await
+        {
+            Ok(resp) => {
+                let summary = resp.content;
+
+                let summary_msg = ChatMessage {
+                    id: Uuid::new_v4(),
+                    role: Role::System,
+                    content: format!("CONTEXT SUMMARY:\n{}", summary),
+                    timestamp: Utc::now(),
+                    channel: ChannelKind::Api,
+                    tool_calls: vec![],
+                    tool_result: None,
+                };
+
+                if let Err(e) = state
+                    .sessions
+                    .compact(&session_id, compact_count, summary_msg)
+                {
+                    return Err(format!("Failed to compact session: {}", e));
+                }
+
+                Ok(format!("Compacted {} messages into summary.", compact_count))
+            }
+            Err(e) => Err(format!("Provider error: {}", e)),
+        }
+    } else {
+        Err("No provider configured.".to_string())
+    }
+}

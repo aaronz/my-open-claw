@@ -160,6 +160,42 @@ impl SessionStore {
         Ok(())
     }
 
+    pub fn replace_messages(&self, session_id: &Uuid, messages: Vec<ChatMessage>) -> Result<()> {
+        let mut session = self
+            .sessions
+            .get_mut(session_id)
+            .ok_or_else(|| OpenClawError::Session(format!("session not found: {session_id}")))?;
+        session.messages = messages;
+        session.updated_at = Utc::now();
+        drop(session);
+        self.persist(session_id);
+        Ok(())
+    }
+
+    pub fn compact(&self, session_id: &Uuid, summarized_count: usize, summary: ChatMessage) -> Result<()> {
+        let mut session = self
+            .sessions
+            .get_mut(session_id)
+            .ok_or_else(|| OpenClawError::Session(format!("session not found: {session_id}")))?;
+
+        if session.messages.len() < summarized_count {
+            return Ok(()); // Messages removed, skip compaction
+        }
+
+        let mut new_msgs = Vec::with_capacity(session.messages.len() - summarized_count + 1);
+        new_msgs.push(summary);
+        
+        for m in session.messages.iter().skip(summarized_count) {
+            new_msgs.push(m.clone());
+        }
+
+        session.messages = new_msgs;
+        session.updated_at = Utc::now();
+        drop(session);
+        self.persist(session_id);
+        Ok(())
+    }
+
     pub fn remove(&self, session_id: &Uuid) {
         if let Some((_, session)) = self.sessions.remove(session_id) {
             self.peer_index

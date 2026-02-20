@@ -98,7 +98,7 @@ async fn handle_text_message(
             command,
             args,
         } => {
-            let result = handle_chat_command(state, &session_id, &command, args.as_deref());
+            let result = handle_chat_command(state, &session_id, &command, args.as_deref()).await;
             return serde_json::to_string(&WsMessage::CommandResult {
                 session_id,
                 command,
@@ -162,7 +162,7 @@ async fn handle_text_message(
     serde_json::to_string(&response).ok()
 }
 
-fn handle_chat_command(
+async fn handle_chat_command(
     state: &Arc<AppState>,
     session_id: &Uuid,
     command: &str,
@@ -180,24 +180,25 @@ fn handle_chat_command(
                 Some(session) => {
                     let msg_count = session.messages.len();
                     let model = &state.config.models.default_model;
-                    format!("Model: {model} | Messages: {msg_count} | Thinking: {:?}", state.config.agent.thinking)
+                    format!(
+                        "Model: {model} | Messages: {msg_count} | Thinking: {:?}",
+                        state.config.agent.thinking
+                    )
                 }
                 None => "Session not found.".to_string(),
             }
         }
         "think" => {
             let level = args.unwrap_or("medium");
-            format!("Thinking level set to: {level} (per-session override not yet supported, config-level is {:?})", state.config.agent.thinking)
+            format!(
+                "Thinking level set to: {level} (per-session override not yet supported, config-level is {:?})",
+                state.config.agent.thinking
+            )
         }
-        "compact" => {
-            match state.sessions.get(session_id) {
-                Some(session) => {
-                    let msg_count = session.messages.len();
-                    format!("Session has {msg_count} messages. Context compaction not yet implemented.")
-                }
-                None => "Session not found.".to_string(),
-            }
-        }
+        "compact" => match crate::agent::compact_session(state.clone(), *session_id).await {
+            Ok(msg) => msg,
+            Err(e) => format!("Compaction failed: {}", e),
+        },
         "verbose" => {
             let on = args.map(|a| a == "on").unwrap_or(false);
             format!("Verbose mode: {}", if on { "on" } else { "off" })
