@@ -97,6 +97,31 @@ impl Channel for TelegramChannel {
         Ok(())
     }
 
+    async fn send_voice(&self, peer_id: &str, audio: Vec<u8>) -> Result<()> {
+        let url = format!("https://api.telegram.org/bot{}/sendVoice", self.token);
+        let part = reqwest::multipart::Part::bytes(audio).file_name("voice.ogg");
+        let form = reqwest::multipart::Form::new()
+            .text("chat_id", peer_id.to_string())
+            .part("voice", part);
+
+        let res = self
+            .client
+            .post(&url)
+            .multipart(form)
+            .send()
+            .await
+            .map_err(|e| openclaw_core::OpenClawError::Provider(e.to_string()))?;
+
+        if !res.status().is_success() {
+            let err = res.text().await.unwrap_or_default();
+            return Err(openclaw_core::OpenClawError::Provider(format!(
+                "Telegram voice error: {}",
+                err
+            )));
+        }
+        Ok(())
+    }
+
     async fn start(&self) -> Result<()> {
         if self.running.swap(true, Ordering::SeqCst) {
             return Ok(()); // Already running

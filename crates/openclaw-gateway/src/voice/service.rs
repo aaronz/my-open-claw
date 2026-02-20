@@ -7,9 +7,7 @@ pub struct VoiceService {
     client: Client,
     api_key: String,
     stt_model: String,
-    #[allow(dead_code)] // Reserved for future TTS
     tts_model: String,
-    #[allow(dead_code)] // Reserved for future TTS
     tts_voice: String,
 }
 
@@ -52,5 +50,27 @@ impl VoiceService {
 
         let json: serde_json::Value = res.json().await?;
         Ok(json["text"].as_str().unwrap_or("").to_string())
+    }
+
+    pub async fn speak(&self, text: &str) -> Result<Vec<u8>> {
+        let body = serde_json::json!({
+            "model": self.tts_model,
+            "input": text,
+            "voice": self.tts_voice
+        });
+
+        let res = self.client.post("https://api.openai.com/v1/audio/speech")
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .json(&body)
+            .send()
+            .await?;
+
+        if !res.status().is_success() {
+            let err = res.text().await?;
+            return Err(anyhow::anyhow!("TTS error: {}", err));
+        }
+
+        let bytes = res.bytes().await?;
+        Ok(bytes.to_vec())
     }
 }

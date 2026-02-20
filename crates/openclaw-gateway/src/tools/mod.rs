@@ -1,3 +1,4 @@
+pub mod python;
 pub mod search;
 pub mod weather;
 
@@ -8,6 +9,9 @@ pub fn default_tools(config: &AppConfig) -> HashMap<String, Box<dyn Tool>> {
     let mut tools: HashMap<String, Box<dyn Tool>> = HashMap::new();
     let weather = weather::WeatherTool;
     tools.insert(weather.definition().name, Box::new(weather));
+
+    let python = python::PythonTool;
+    tools.insert(python.definition().name, Box::new(python));
 
     if let Some(key) = &config.agent.tavily_api_key {
         let search = search::SearchTool::new(key.clone());

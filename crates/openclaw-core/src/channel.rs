@@ -37,6 +37,9 @@ pub trait Channel: Send + Sync {
     fn kind(&self) -> ChannelKind;
     fn name(&self) -> &str;
     async fn send_message(&self, peer_id: &str, content: &str) -> Result<()>;
+    async fn send_voice(&self, _peer_id: &str, _audio: Vec<u8>) -> Result<()> {
+        Ok(())
+    }
     async fn start(&self) -> Result<()>;
     async fn stop(&self) -> Result<()>;
 }

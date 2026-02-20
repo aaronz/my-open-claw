@@ -61,6 +61,30 @@ impl Channel for DiscordChannel {
         Ok(())
     }
 
+    async fn send_voice(&self, peer_id: &str, audio: Vec<u8>) -> Result<()> {
+        let url = format!("https://discord.com/api/v10/channels/{}/messages", peer_id);
+        let part = reqwest::multipart::Part::bytes(audio).file_name("voice.ogg");
+        let form = reqwest::multipart::Form::new().part("files[0]", part);
+
+        let res = self
+            .client
+            .post(&url)
+            .header("Authorization", format!("Bot {}", self.token))
+            .multipart(form)
+            .send()
+            .await
+            .map_err(|e| openclaw_core::OpenClawError::Provider(e.to_string()))?;
+
+        if !res.status().is_success() {
+            let err = res.text().await.unwrap_or_default();
+            return Err(openclaw_core::OpenClawError::Provider(format!(
+                "Discord voice error: {}",
+                err
+            )));
+        }
+        Ok(())
+    }
+
     async fn start(&self) -> Result<()> {
         let token = self.token.clone();
         let client = self.client.clone();
