@@ -5,8 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OpenClaw Chat</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background: #f0f2f5; display: flex; flex-direction: column; height: 95vh; }
-        h1 { text-align: center; color: #333; margin-bottom: 20px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; background: #f0f2f5; display: flex; flex-direction: row; gap: 20px; height: 95vh; }
+        #left-pane { flex: 1; display: flex; flex-direction: column; height: 100%; }
+        #right-pane { flex: 1; display: none; flex-direction: column; background: white; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); padding: 20px; height: 100%; overflow-y: auto; }
+        #canvas-content { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; background: #f8f9fa; padding: 15px; border-radius: 8px; white-space: pre-wrap; font-size: 14px; border: 1px solid #e1e4e8; }
+        #canvas-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        #canvas-title { font-weight: bold; font-size: 18px; color: #333; }
+        #canvas-lang { font-size: 12px; color: #666; background: #eee; padding: 2px 6px; border-radius: 4px; }
+        h1 { text-align: center; color: #333; margin-top: 0; margin-bottom: 20px; }
         #chat { flex: 1; overflow-y: scroll; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); display: flex; flex-direction: column; gap: 12px; }
         .msg { padding: 12px 16px; border-radius: 18px; max-width: 80%; line-height: 1.5; word-wrap: break-word; }
         .user { align-self: flex-end; background: #0084ff; color: white; border-bottom-right-radius: 4px; }
@@ -22,11 +28,20 @@
     </style>
 </head>
 <body>
-    <h1>🦞 OpenClaw</h1>
-    <div id="chat"></div>
-    <div id="input-area">
-        <input type="text" id="msg" placeholder="Type a message..." autofocus autocomplete="off">
-        <button onclick="send()">Send</button>
+    <div id="left-pane">
+        <h1>🦞 OpenClaw</h1>
+        <div id="chat"></div>
+        <div id="input-area">
+            <input type="text" id="msg" placeholder="Type a message..." autofocus autocomplete="off">
+            <button onclick="send()">Send</button>
+        </div>
+    </div>
+    <div id="right-pane">
+        <div id="canvas-header">
+            <div id="canvas-title">Artifact</div>
+            <div id="canvas-lang">text</div>
+        </div>
+        <pre id="canvas-content"></pre>
     </div>
 
     <script>
@@ -34,6 +49,11 @@
         const ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws`);
         const chat = document.getElementById('chat');
         const input = document.getElementById('msg');
+        const rightPane = document.getElementById('right-pane');
+        const canvasContent = document.getElementById('canvas-content');
+        const canvasTitle = document.getElementById('canvas-title');
+        const canvasLang = document.getElementById('canvas-lang');
+
         let currentResponse = null;
         let thinkingEl = null;
 
@@ -64,14 +84,8 @@
                 if (msg.done) {
                     currentResponse = null;
                 }
-            } else if (msg.type === 'new_message') {
-                // If it's from us (based on content match heuristic or if we tracked ID), ignore?
-                // The gateway broadcasts everything.
-                // But we add our own message to UI immediately for responsiveness.
-                // So we can ignore `new_message` if it looks like ours?
-                // Actually, `new_message` has `session_id`.
-                // For simplicity, we just ignore `new_message` for now and rely on local echo + agent_response.
-                // Proper way: wait for ACK. But this is simple UI.
+            } else if (msg.type === 'canvas_update') {
+                showCanvas(msg);
             } else if (msg.type === 'error') {
                 addSystem("Error: " + msg.message);
             }
@@ -85,7 +99,7 @@
             ws.send(JSON.stringify({
                 type: 'send_message',
                 content: text,
-                channel: 'web',
+                channel: 'webchat',
                 peer_id: peerId
             }));
             input.value = '';
@@ -126,6 +140,13 @@
                 thinkingEl.remove();
                 thinkingEl = null;
             }
+        }
+
+        function showCanvas(data) {
+            rightPane.style.display = 'flex';
+            canvasContent.innerText = data.content;
+            canvasTitle.innerText = data.title || 'Artifact';
+            canvasLang.innerText = data.language || 'text';
         }
     </script>
 </body>

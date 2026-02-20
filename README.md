@@ -12,15 +12,26 @@ A powerful, multi-channel, autonomous AI agent gateway written in Rust. Port of 
     -   **Telegram**: Full support (Text, Voice, Groups).
     -   **Discord**: Full support (Text, Voice, Images, Threads).
     -   **Slack**: Inbound/Outbound via Socket Mode.
-    -   **Web/CLI**: Real-time WebSocket interface.
+    -   **WhatsApp**: Support via Cloud API.
+    -   **Web/CLI**: Real-time WebSocket interface with Artifact support.
 -   **🛠️ Tools & Capabilities**:
+    -   **Browser Control**: Headless Chrome for web interaction and data extraction.
+    -   **Canvas**: Persistent visual workspace for code, documents, and charts.
     -   **Web Search**: Real-time information via Tavily.
     -   **Code Interpreter**: Safe(ish) Python execution for calculations and logic.
-    -   **Weather**: Built-in weather lookup.
+-   **🧩 Skills System**:
+    -   **GitHub**: Manage issues and search code.
+    -   **Obsidian**: Read/write vault notes.
+    -   **Spotify**: Control playback and search music.
+    -   **Notes**: Apple Notes integration.
+    -   **Custom Skills**: Easily extensible via the Skill trait.
 -   **💾 Long-term Memory**:
     -   **Vector RAG**: Stores every interaction in Qdrant (local Docker).
     -   **Context Compaction**: Automatically summarizes long conversations to save tokens.
     -   **Persistence**: Session state saved to disk.
+-   **🛡️ Reliability**:
+    -   **Model Failover**: Automatically rotates through providers on failure.
+    -   **OAuth**: Secure skill authentication infrastructure.
 -   **🤖 Headless Autonomy**: Webhook endpoint (`/api/webhook`) triggers agent logic autonomously.
 -   **🐳 Production Ready**: Docker & Docker Compose support.
 

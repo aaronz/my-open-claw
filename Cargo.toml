@@ -4,6 +4,7 @@ members = [
     "crates/openclaw-core",
     "crates/openclaw-gateway",
     "crates/openclaw-cli",
+    "apps/macos/src-tauri",
 ]
 
 [workspace.package]
