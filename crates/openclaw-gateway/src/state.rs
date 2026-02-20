@@ -7,6 +7,7 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
+use crate::memory::service::MemoryService;
 use crate::provider::create_provider;
 use crate::tools::default_tools;
 
@@ -18,12 +19,13 @@ pub struct AppState {
     pub provider: Option<Arc<dyn Provider>>,
     pub tools: HashMap<String, Box<dyn Tool>>,
     pub channels: DashMap<ChannelKind, Arc<dyn Channel>>,
+    pub memory: Option<MemoryService>,
     pub workspace_prompt: Option<String>,
     pub start_time: DateTime<Utc>,
 }
 
 impl AppState {
-    pub fn new(config: AppConfig) -> Arc<Self> {
+    pub async fn new(config: AppConfig) -> Arc<Self> {
         let provider = config
             .models
             .providers
@@ -43,6 +45,18 @@ impl AppState {
 
         let tools = default_tools();
 
+        let memory = if config.memory.enabled {
+            match MemoryService::new(&config).await {
+                Ok(m) => Some(m),
+                Err(e) => {
+                    tracing::error!("Failed to init memory service: {}", e);
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
         Arc::new(Self {
             config,
             sessions,
@@ -51,6 +65,7 @@ impl AppState {
             provider,
             tools,
             channels: DashMap::new(),
+            memory,
             workspace_prompt,
             start_time: Utc::now(),
         })
@@ -74,6 +89,7 @@ impl AppState {
             provider,
             tools,
             channels: DashMap::new(),
+            memory: None,
             workspace_prompt: None,
             start_time: Utc::now(),
         })

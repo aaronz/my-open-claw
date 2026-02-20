@@ -2,31 +2,28 @@ use crate::state::AppState;
 use chrono::Utc;
 use openclaw_core::session::{ChatMessage, Role};
 use openclaw_core::{ChannelKind, WsMessage};
+use serde_json::json;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::error;
 use uuid::Uuid;
 
 pub async fn run_agent_cycle(state: Arc<AppState>, session_id: Uuid) {
-    // 1. Send Thinking event
     if let Ok(json) = serde_json::to_string(&WsMessage::AgentThinking {
         session_id,
     }) {
         state.send_to_subscribers(&session_id, &json);
     }
 
-    // 2. Check provider
     if state.provider.is_none() {
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
         
-        // Find last user message content for context, safely
         let (last_content, channel) = if let Some(s) = state.sessions.get(&session_id) {
             (
                 s.messages.last().map(|m| m.content.clone()).unwrap_or_default(),
                 s.channel.clone()
             )
         } else {
-            // Session gone
             return;
         };
             
@@ -58,40 +55,28 @@ pub async fn run_agent_cycle(state: Arc<AppState>, session_id: Uuid) {
     }
     
     let provider = state.provider.as_ref().unwrap();
+    
+    // Per-session config
     let (model, max_tokens, temp_override) = {
         let default_model = state.config.models.default_model.clone();
         let default_max_tokens = state.config.agent.max_tokens;
 
         if let Some(session) = state.sessions.get(&session_id) {
-            let m = session
-                .metadata
-                .get("model")
-                .and_then(|v| v.as_str())
-                .map(String::from)
-                .unwrap_or(default_model);
-            let t = session
-                .metadata
-                .get("temperature")
-                .and_then(|v| v.as_f64())
-                .map(|f| f as f32);
-            let mt = session
-                .metadata
-                .get("max_tokens")
-                .and_then(|v| v.as_u64())
-                .map(|u| u as u32)
-                .or(default_max_tokens);
+            let m = session.metadata.get("model").and_then(|v| v.as_str()).map(String::from).unwrap_or(default_model);
+            let t = session.metadata.get("temperature").and_then(|v| v.as_f64()).map(|f| f as f32);
+            let mt = session.metadata.get("max_tokens").and_then(|v| v.as_u64()).map(|u| u as u32).or(default_max_tokens);
             (m, mt, t)
         } else {
             (default_model, default_max_tokens, None)
         }
     };
 
-    // 3. Loop turns
+    // Loop
     for _turn in 0..5 {
-        let (messages, system_prompt, channel) = {
+        let (messages, mut system_prompt, channel) = {
             let session = match state.sessions.get(&session_id) {
                 Some(s) => s,
-                None => return, // Session disappeared
+                None => return,
             };
             (
                 session.messages.clone(),
@@ -99,6 +84,21 @@ pub async fn run_agent_cycle(state: Arc<AppState>, session_id: Uuid) {
                 session.channel.clone(),
             )
         };
+
+        // RAG Retrieval
+        if let Some(memory) = &state.memory {
+            if let Some(last_msg) = messages.last() {
+                if last_msg.role == Role::User {
+                    if let Ok(results) = memory.search_memory(&last_msg.content, 3).await {
+                        if !results.is_empty() {
+                            let context = results.join("\n---\n");
+                            let memory_block = format!("\n\nRELEVANT MEMORIES:\n{}\n", context);
+                            system_prompt = Some(format!("{}{}", system_prompt.unwrap_or_default(), memory_block));
+                        }
+                    }
+                }
+            }
+        }
 
         let (token_tx, mut token_rx) = mpsc::channel::<String>(256);
         let stream_state = Arc::clone(&state);
@@ -117,23 +117,17 @@ pub async fn run_agent_cycle(state: Arc<AppState>, session_id: Uuid) {
         });
 
         let tools: Vec<_> = state.tools.values().map(|t| t.definition()).collect();
-        let tools_slice = if tools.is_empty() {
-            None
-        } else {
-            Some(tools.as_slice())
-        };
+        let tools_slice = if tools.is_empty() { None } else { Some(tools.as_slice()) };
 
-        let result = provider
-            .stream_chat(
-                &messages,
-                system_prompt.as_deref(),
-                &model,
-                max_tokens,
-                temp_override,
-                tools_slice,
-                token_tx,
-            )
-            .await;
+        let result = provider.stream_chat(
+             &messages,
+             system_prompt.as_deref(),
+             &model,
+             max_tokens,
+             temp_override,
+             tools_slice,
+             token_tx
+        ).await;
         
         let _ = stream_task.await;
         
@@ -150,8 +144,26 @@ pub async fn run_agent_cycle(state: Arc<AppState>, session_id: Uuid) {
                  };
                  let _ = state.sessions.add_message(&session_id, assistant_msg);
                  
+                 // Save to memory
+                 if let Some(memory) = &state.memory {
+                     if let Some(last_msg) = messages.last() {
+                         if last_msg.role == Role::User && !resp.content.is_empty() {
+                             let text = format!("User: {}\nAssistant: {}", last_msg.content, resp.content);
+                             let mem = memory.clone();
+                             tokio::spawn(async move {
+                                 let metadata = json!({
+                                     "role": "interaction",
+                                     "timestamp": Utc::now().to_rfc3339()
+                                 });
+                                 if let Err(e) = mem.add_memory(&text, metadata).await {
+                                     error!("Failed to save memory: {}", e);
+                                 }
+                             });
+                         }
+                     }
+                 }
+                 
                  if resp.tool_calls.is_empty() {
-                      // Done
                       if let Ok(json) = serde_json::to_string(&WsMessage::AgentResponse {
                           session_id,
                           content: String::new(),
@@ -165,7 +177,6 @@ pub async fn run_agent_cycle(state: Arc<AppState>, session_id: Uuid) {
                               if let Some(s) = state.sessions.get(&session_id) {
                                   s.peer_id.clone()
                               } else {
-                                  // Session gone, can't reply
                                   break;
                               }
                           };
@@ -179,11 +190,9 @@ pub async fn run_agent_cycle(state: Arc<AppState>, session_id: Uuid) {
                               }
                           });
                       }
-
                       break;
                  }
                  
-                 // Thinking for tools
                  if let Ok(json) = serde_json::to_string(&WsMessage::AgentThinking {
                      session_id,
                  }) {
@@ -242,16 +251,10 @@ pub async fn compact_session(state: Arc<AppState>, session_id: Uuid) -> Result<S
 
     let keep_count = 5;
     let compact_count = msg_count - keep_count;
-    let to_summarize: Vec<ChatMessage> = session
-        .messages
-        .iter()
-        .take(compact_count)
-        .cloned()
-        .collect();
+    let to_summarize: Vec<ChatMessage> = session.messages.iter().take(compact_count).cloned().collect();
     drop(session);
 
-    let context_str = to_summarize
-        .iter()
+    let context_str = to_summarize.iter()
         .map(|m| format!("{:?}: {}", m.role, m.content))
         .collect::<Vec<_>>()
         .join("\n\n");
@@ -259,7 +262,6 @@ pub async fn compact_session(state: Arc<AppState>, session_id: Uuid) -> Result<S
     if let Some(provider) = &state.provider {
         let (tx, _rx) = mpsc::channel(1);
         let summary_prompt = "Summarize the following conversation history into a concise context summary. Focus on key facts, user preferences, and unresolved tasks.";
-
         let msgs = vec![ChatMessage {
             id: Uuid::new_v4(),
             role: Role::User,
@@ -269,16 +271,11 @@ pub async fn compact_session(state: Arc<AppState>, session_id: Uuid) -> Result<S
             tool_calls: vec![],
             tool_result: None,
         }];
-
         let model = &state.config.models.default_model;
 
-        match provider
-            .stream_chat(&msgs, None, model, None, None, None, tx)
-            .await
-        {
+        match provider.stream_chat(&msgs, None, model, None, None, None, tx).await {
             Ok(resp) => {
                 let summary = resp.content;
-
                 let summary_msg = ChatMessage {
                     id: Uuid::new_v4(),
                     role: Role::System,
@@ -288,14 +285,9 @@ pub async fn compact_session(state: Arc<AppState>, session_id: Uuid) -> Result<S
                     tool_calls: vec![],
                     tool_result: None,
                 };
-
-                if let Err(e) = state
-                    .sessions
-                    .compact(&session_id, compact_count, summary_msg)
-                {
+                if let Err(e) = state.sessions.compact(&session_id, compact_count, summary_msg) {
                     return Err(format!("Failed to compact session: {}", e));
                 }
-
                 Ok(format!("Compacted {} messages into summary.", compact_count))
             }
             Err(e) => Err(format!("Provider error: {}", e)),

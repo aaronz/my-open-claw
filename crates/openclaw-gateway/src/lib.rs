@@ -2,6 +2,7 @@ pub mod agent;
 pub mod auth;
 pub mod channels;
 pub mod cron;
+pub mod memory;
 pub mod provider;
 pub mod routes;
 pub mod state;
@@ -40,7 +41,7 @@ pub async fn start_gateway(config: AppConfig) -> openclaw_core::Result<()> {
     };
 
     let needs_auth = !matches!(config.gateway.auth.mode, AuthMode::None);
-    let state = AppState::new(config);
+    let state = AppState::new(config).await;
 
     // Initialize Channels
     if let Some(telegram_config) = &state.config.channels.telegram {

@@ -14,6 +14,8 @@ pub struct AppConfig {
     #[serde(default)]
     pub models: ModelsConfig,
     #[serde(default)]
+    pub memory: MemoryConfig,
+    #[serde(default)]
     pub workspace: WorkspaceConfig,
 }
 
@@ -115,6 +117,38 @@ pub struct ModelsConfig {
     pub providers: Vec<ProviderConfig>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemoryConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_qdrant_url")]
+    pub qdrant_url: String,
+    #[serde(default = "default_collection_name")]
+    pub collection_name: String,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_qdrant_url() -> String {
+    "http://localhost:6333".to_string()
+}
+
+fn default_collection_name() -> String {
+    "openclaw_memory".to_string()
+}
+
+impl Default for MemoryConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            qdrant_url: default_qdrant_url(),
+            collection_name: default_collection_name(),
+        }
+    }
+}
+
 fn default_model() -> String {
     "claude-sonnet-4-20250514".to_string()
 }
@@ -157,6 +191,7 @@ impl Default for AppConfig {
             channels: ChannelsConfig::default(),
             agent: AgentConfig::default(),
             models: ModelsConfig::default(),
+            memory: MemoryConfig::default(),
             workspace: WorkspaceConfig::default(),
         }
     }

@@ -23,6 +23,9 @@ futures = { workspace = true }
 reqwest = { workspace = true }
 async-trait = { workspace = true }
 tokio-tungstenite = { workspace = true }
+qdrant-client = "1.10"
+fastembed = "4"
+anyhow = "1"
 
 [dev-dependencies]
 reqwest = { workspace = true }
