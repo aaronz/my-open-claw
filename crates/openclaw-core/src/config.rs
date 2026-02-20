@@ -102,6 +102,15 @@ pub struct AgentConfig {
     pub tavily_api_key: Option<String>,
     pub github_token: Option<String>,
     pub obsidian_path: Option<String>,
+    #[serde(default)]
+    pub mcp_servers: Vec<McpServerConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpServerConfig {
+    pub name: String,
+    pub command: String,
+    pub args: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -260,6 +269,9 @@ impl Default for AgentConfig {
             thinking: ThinkingLevel::Medium,
             max_tokens: None,
             tavily_api_key: None,
+            github_token: None,
+            obsidian_path: None,
+            mcp_servers: vec![],
         }
     }
 }

@@ -1,7 +1,7 @@
 use crate::state::AppState;
 use chrono::Utc;
 use openclaw_core::session::{ChatMessage, Role};
-use openclaw_core::{ChannelKind, WsMessage};
+use openclaw_core::{ChannelKind, WsMessage, Tool};
 use serde_json::json;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -137,8 +137,10 @@ pub async fn run_agent_cycle(state: Arc<AppState>, session_id: Uuid) {
 
         let tools: Vec<_> = state.tools.iter().map(|t| t.value().definition()).collect();
         let skill_tools = state.skills.all_tools();
+        let mcp_tools = state.mcp.get_tools().await;
         let mut all_tools = tools;
         all_tools.extend(skill_tools);
+        all_tools.extend(mcp_tools);
         let tools_slice = if all_tools.is_empty() { None } else { Some(all_tools.as_slice()) };
 
         let result = provider.stream_chat(
@@ -260,6 +262,11 @@ pub async fn run_agent_cycle(state: Arc<AppState>, session_id: Uuid) {
                         s.tools().iter().any(|t| t.name == tc.name)
                     }) {
                         match skill.execute_tool(&tc.name, tc.arguments.clone()).await {
+                            Ok(s) => s,
+                            Err(e) => format!("Error: {e}"),
+                        }
+                    } else if let Some(mcp_tool) = state.mcp.tools.lock().await.iter().find(|t| t.name == tc.name) {
+                        match mcp_tool.execute(tc.arguments.clone()).await {
                             Ok(s) => s,
                             Err(e) => format!("Error: {e}"),
                         }

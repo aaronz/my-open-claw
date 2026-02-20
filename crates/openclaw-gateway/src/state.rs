@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 use crate::auth::oauth::OAuthManager;
 use crate::cron::CronScheduler;
+use crate::mcp::McpManager;
 use crate::memory::service::MemoryService;
 use crate::provider::create_provider_with_fallback;
 use crate::skills::{SkillRegistry, default_skills};
@@ -30,6 +31,7 @@ pub struct AppState {
     pub start_time: DateTime<Utc>,
     pub skills: SkillRegistry,
     pub oauth: Arc<OAuthManager>,
+    pub mcp: Arc<McpManager>,
 }
 
 impl AppState {
@@ -84,7 +86,17 @@ impl AppState {
             start_time: Utc::now(),
             skills,
             oauth: Arc::new(OAuthManager::new()),
+            mcp: Arc::new(McpManager::new()),
         });
+
+        for server in &config.agent.mcp_servers {
+            let mcp = state.mcp.clone();
+            let cmd = server.command.clone();
+            let args = server.args.clone();
+            tokio::spawn(async move {
+                let _ = mcp.add_server(cmd, args).await;
+            });
+        }
 
         let tools = default_tools(&config, cron.clone(), state.clone());
         for (name, tool) in tools {
@@ -116,6 +128,7 @@ impl AppState {
             start_time: Utc::now(),
             skills,
             oauth: Arc::new(OAuthManager::new()),
+            mcp: Arc::new(McpManager::new()),
         });
 
         let tools = default_tools(&config, cron.clone(), state.clone());

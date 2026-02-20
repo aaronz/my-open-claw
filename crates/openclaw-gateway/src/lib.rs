@@ -2,6 +2,7 @@ pub mod agent;
 pub mod auth;
 pub mod channels;
 pub mod cron;
+pub mod mcp;
 pub mod memory;
 pub mod provider;
 pub mod routes;
