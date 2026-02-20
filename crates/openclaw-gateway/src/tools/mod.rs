@@ -1,17 +1,24 @@
+pub mod fs;
 pub mod python;
 pub mod search;
 pub mod weather;
 
 use openclaw_core::{AppConfig, Tool};
 use std::collections::HashMap;
+use std::sync::Arc;
 
-pub fn default_tools(config: &AppConfig) -> HashMap<String, Box<dyn Tool>> {
+use crate::cron::CronScheduler;
+
+pub fn default_tools(config: &AppConfig, cron: Arc<CronScheduler>) -> HashMap<String, Box<dyn Tool>> {
     let mut tools: HashMap<String, Box<dyn Tool>> = HashMap::new();
     let weather = weather::WeatherTool;
     tools.insert(weather.definition().name, Box::new(weather));
 
     let python = python::PythonTool;
     tools.insert(python.definition().name, Box::new(python));
+
+    let fs = fs::FileSystemTool::new(config);
+    tools.insert(fs.definition().name, Box::new(fs));
 
     if let Some(key) = &config.agent.tavily_api_key {
         let search = search::SearchTool::new(key.clone());

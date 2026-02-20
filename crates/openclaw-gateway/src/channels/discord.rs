@@ -85,6 +85,27 @@ impl Channel for DiscordChannel {
         Ok(())
     }
 
+    async fn send_typing(&self, peer_id: &str) -> Result<()> {
+        let url = format!("https://discord.com/api/v10/channels/{}/typing", peer_id);
+        
+        let res = self
+            .client
+            .post(&url)
+            .header("Authorization", format!("Bot {}", self.token))
+            .send()
+            .await
+            .map_err(|e| openclaw_core::OpenClawError::Provider(e.to_string()))?;
+
+        if !res.status().is_success() {
+            let err = res.text().await.unwrap_or_default();
+            return Err(openclaw_core::OpenClawError::Provider(format!(
+                "Discord typing error: {}",
+                err
+            )));
+        }
+        Ok(())
+    }
+
     async fn start(&self) -> Result<()> {
         let token = self.token.clone();
         let client = self.client.clone();

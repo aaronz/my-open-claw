@@ -7,8 +7,10 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
+use crate::cron::CronScheduler;
 use crate::memory::service::MemoryService;
-use crate::provider::create_provider;
+use crate::provider::create_provider_with_fallback;
+use crate::skills::{SkillRegistry, default_skills};
 use crate::tools::default_tools;
 use crate::voice::service::VoiceService;
 
@@ -22,17 +24,15 @@ pub struct AppState {
     pub channels: DashMap<ChannelKind, Arc<dyn Channel>>,
     pub memory: Option<MemoryService>,
     pub voice: Option<VoiceService>,
+    pub cron: Arc<CronScheduler>,
     pub workspace_prompt: Option<String>,
     pub start_time: DateTime<Utc>,
+    pub skills: SkillRegistry,
 }
 
 impl AppState {
     pub async fn new(config: AppConfig) -> Arc<Self> {
-        let provider = config
-            .models
-            .providers
-            .first()
-            .and_then(|p| create_provider(p));
+        let provider = create_provider_with_fallback(&config.models.providers);
 
         let workspace_prompt =
             openclaw_core::workspace::load_prompt_files(&config.workspace.path);
@@ -45,7 +45,9 @@ impl AppState {
         let sessions = SessionStore::with_persistence(sessions_dir)
             .unwrap_or_else(|_| SessionStore::new());
 
-        let tools = default_tools(&config);
+        let cron = Arc::new(CronScheduler::new());
+        // Pass cron to tools?
+        let tools = default_tools(&config, cron.clone());
 
         let memory = if config.memory.enabled {
             match MemoryService::new(&config).await {
@@ -61,6 +63,12 @@ impl AppState {
 
         let voice = VoiceService::new(&config);
 
+        let memory_ref = memory.clone();
+        let mut skills = default_skills();
+        if let Some(ref mem) = memory_ref {
+            skills.register(Box::new(crate::skills::MemorySkill::new(Some(Arc::new(mem.clone())))));
+        }
+
         Arc::new(Self {
             config,
             sessions,
@@ -71,20 +79,21 @@ impl AppState {
             channels: DashMap::new(),
             memory,
             voice,
+            cron,
             workspace_prompt,
             start_time: Utc::now(),
+            skills,
         })
     }
 
     /// In-memory only — no disk persistence or workspace prompt loading.
     pub fn new_ephemeral(config: AppConfig) -> Arc<Self> {
-        let provider = config
-            .models
-            .providers
-            .first()
-            .and_then(|p| create_provider(p));
+        let provider = create_provider_with_fallback(&config.models.providers);
 
-        let tools = default_tools(&config);
+        let cron = Arc::new(CronScheduler::new());
+        let tools = default_tools(&config, cron.clone());
+
+        let skills = default_skills();
 
         Arc::new(Self {
             config,
@@ -96,8 +105,10 @@ impl AppState {
             channels: DashMap::new(),
             memory: None,
             voice: None,
+            cron,
             workspace_prompt: None,
             start_time: Utc::now(),
+            skills,
         })
     }
 

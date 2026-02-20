@@ -123,6 +123,20 @@ impl Channel for TelegramChannel {
         Ok(())
     }
 
+    async fn send_typing(&self, peer_id: &str) -> Result<()> {
+        let url = format!("https://api.telegram.org/bot{}/sendChatAction", self.token);
+        let params = [("chat_id", peer_id), ("action", "typing")];
+        
+        let res = self.client.post(&url).form(&params).send().await
+            .map_err(|e| openclaw_core::OpenClawError::Provider(e.to_string()))?;
+            
+        if !res.status().is_success() {
+            let err = res.text().await.unwrap_or_default();
+            return Err(openclaw_core::OpenClawError::Provider(format!("Telegram typing error: {}", err)));
+        }
+        Ok(())
+    }
+
     async fn start(&self) -> Result<()> {
         if self.running.swap(true, Ordering::SeqCst) {
             return Ok(()); // Already running

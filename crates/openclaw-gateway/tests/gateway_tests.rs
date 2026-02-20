@@ -170,7 +170,7 @@ mod tests {
             base_url: None,
         });
 
-        let state = openclaw_gateway::state::AppState::new(config);
+        let state = openclaw_gateway::state::AppState::new(config).await;
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
 

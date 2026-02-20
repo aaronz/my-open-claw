@@ -40,6 +40,9 @@ pub trait Channel: Send + Sync {
     async fn send_voice(&self, _peer_id: &str, _audio: Vec<u8>) -> Result<()> {
         Ok(())
     }
+    async fn send_typing(&self, _peer_id: &str) -> Result<()> {
+        Ok(())
+    }
     async fn start(&self) -> Result<()>;
     async fn stop(&self) -> Result<()>;
 }

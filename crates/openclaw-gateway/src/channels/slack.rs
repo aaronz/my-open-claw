@@ -67,6 +67,38 @@ impl Channel for SlackChannel {
         Ok(())
     }
 
+    async fn send_typing(&self, peer_id: &str) -> Result<()> {
+        let url = "https://slack.com/api/chat.postMessage";
+        let body = serde_json::json!({
+            "channel": peer_id,
+            "text": "",
+            "username": "OpenClaw",
+            "icon_emoji": ":hourglass_flowing_sand:",
+            "mrkdwn": false
+        });
+
+        let res = self
+            .client
+            .post(url)
+            .header("Authorization", format!("Bearer {}", self.bot_token))
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| openclaw_core::OpenClawError::Provider(e.to_string()))?;
+
+        let json: Value = res
+            .json()
+            .await
+            .map_err(|e| openclaw_core::OpenClawError::Provider(e.to_string()))?;
+        if !json["ok"].as_bool().unwrap_or(false) {
+            return Err(openclaw_core::OpenClawError::Provider(format!(
+                "Slack typing error: {}",
+                json["error"]
+            )));
+        }
+        Ok(())
+    }
+
     async fn start(&self) -> Result<()> {
         let app_token = self.app_token.clone();
         let client = self.client.clone();

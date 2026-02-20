@@ -86,6 +86,11 @@ pub async fn run_agent_cycle(state: Arc<AppState>, session_id: Uuid) {
             )
         };
 
+        let skill_prompts = state.skills.system_prompts();
+        if !skill_prompts.is_empty() {
+            system_prompt = Some(format!("{}\n\n{}", system_prompt.unwrap_or_default(), skill_prompts));
+        }
+
         // RAG Retrieval
         if let Some(memory) = &state.memory {
             if let Some(last_msg) = messages.last() {
@@ -100,6 +105,19 @@ pub async fn run_agent_cycle(state: Arc<AppState>, session_id: Uuid) {
                 }
             }
         }
+
+        let typing_state = Arc::clone(&state);
+        let typing_session_id = session_id;
+        let typing_channel = channel.clone();
+        let typing_handle = tokio::spawn(async move {
+            if let Some(chan) = typing_state.channels.get(&typing_channel) {
+                if let Some(session) = typing_state.sessions.get(&typing_session_id) {
+                    let peer_id = session.peer_id.clone();
+                    drop(session);
+                    let _ = chan.value().send_typing(&peer_id).await;
+                }
+            }
+        });
 
         let (token_tx, mut token_rx) = mpsc::channel::<String>(256);
         let stream_state = Arc::clone(&state);
@@ -118,7 +136,10 @@ pub async fn run_agent_cycle(state: Arc<AppState>, session_id: Uuid) {
         });
 
         let tools: Vec<_> = state.tools.values().map(|t| t.definition()).collect();
-        let tools_slice = if tools.is_empty() { None } else { Some(tools.as_slice()) };
+        let skill_tools = state.skills.all_tools();
+        let mut all_tools = tools;
+        all_tools.extend(skill_tools);
+        let tools_slice = if all_tools.is_empty() { None } else { Some(all_tools.as_slice()) };
 
         let result = provider.stream_chat(
              &messages,
@@ -224,15 +245,27 @@ pub async fn run_agent_cycle(state: Arc<AppState>, session_id: Uuid) {
                      state.send_to_subscribers(&session_id, &json);
                  }
                  
-                 for tc in resp.tool_calls {
-                      let output = if let Some(tool) = state.tools.get(&tc.name) {
-                          match tool.execute(tc.arguments.clone()).await {
-                              Ok(s) => s,
-                              Err(e) => format!("Error: {e}")
-                          }
-                      } else {
-                          format!("Error: Tool not found: {}", tc.name)
-                      };
+                for tc in resp.tool_calls {
+                    let output = if let Some(tool) = state.tools.get(&tc.name) {
+                        let mut args = tc.arguments.clone();
+                        if let Some(obj) = args.as_object_mut() {
+                            obj.insert("_session_id".to_string(), json!(session_id));
+                        }
+                        
+                        match tool.execute(args).await {
+                            Ok(s) => s,
+                            Err(e) => format!("Error: {e}"),
+                        }
+                    } else if let Some(skill) = state.skills.enabled_skills().iter().find(|s| {
+                        s.tools().iter().any(|t| t.name == tc.name)
+                    }) {
+                        match skill.execute_tool(&tc.name, tc.arguments.clone()).await {
+                            Ok(s) => s,
+                            Err(e) => format!("Error: {e}"),
+                        }
+                    } else {
+                        format!("Error: Tool not found: {}", tc.name)
+                    };
                       
                       let tool_msg = ChatMessage {
                           id: Uuid::new_v4(),

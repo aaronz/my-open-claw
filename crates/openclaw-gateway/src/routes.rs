@@ -18,6 +18,7 @@ pub fn api_router() -> Router<Arc<AppState>> {
         .route("/api/config", get(get_config))
         .route("/api/status", get(status))
         .route("/api/webhook", post(webhook))
+        .route("/api/memory", post(ingest_memory))
 }
 
 async fn index_html() -> impl axum::response::IntoResponse {
@@ -109,6 +110,31 @@ async fn webhook(
         "source": source,
         "session_id": session_id
     }))
+}
+
+async fn ingest_memory(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<Value>,
+) -> Json<Value> {
+    if let Some(memory) = &state.memory {
+        let content = body["content"].as_str().unwrap_or("");
+        if content.is_empty() {
+            return Json(json!({ "error": "content required" }));
+        }
+        let metadata = body.get("metadata").cloned().unwrap_or(json!({}));
+
+        let mem = memory.clone();
+        let content_owned = content.to_string();
+        tokio::spawn(async move {
+            if let Err(e) = mem.add_memory(&content_owned, metadata).await {
+                tracing::error!("Ingest failed: {}", e);
+            }
+        });
+
+        Json(json!({ "status": "ingesting" }))
+    } else {
+        Json(json!({ "error": "memory disabled" }))
+    }
 }
 
 fn redact_secrets(value: &mut Value) {

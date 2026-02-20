@@ -5,6 +5,7 @@ pub mod cron;
 pub mod memory;
 pub mod provider;
 pub mod routes;
+pub mod skills;
 pub mod state;
 pub mod tools;
 pub mod voice;
@@ -43,6 +44,9 @@ pub async fn start_gateway(config: AppConfig) -> openclaw_core::Result<()> {
 
     let needs_auth = !matches!(config.gateway.auth.mode, AuthMode::None);
     let state = AppState::new(config).await;
+
+    // Start Cron Scheduler
+    state.cron.clone().start(state.clone());
 
     // Initialize Channels
     if let Some(telegram_config) = &state.config.channels.telegram {
