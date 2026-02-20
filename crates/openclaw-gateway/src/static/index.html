@@ -42,9 +42,13 @@
             <div id="canvas-lang">text</div>
         </div>
         <pre id="canvas-content"></pre>
+        <div id="mermaid-container"></div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
     <script>
+        mermaid.initialize({ startOnLoad: false });
+
         const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws`);
         const chat = document.getElementById('chat');
@@ -142,11 +146,27 @@
             }
         }
 
-        function showCanvas(data) {
+        async function showCanvas(data) {
             rightPane.style.display = 'flex';
-            canvasContent.innerText = data.content;
             canvasTitle.innerText = data.title || 'Artifact';
             canvasLang.innerText = data.language || 'text';
+            
+            if (data.language === 'mermaid') {
+                canvasContent.style.display = 'none';
+                const mermaidContainer = document.getElementById('mermaid-container');
+                mermaidContainer.style.display = 'block';
+                mermaidContainer.innerHTML = `<div class="mermaid">${data.content}</div>`;
+                try {
+                    await mermaid.run();
+                } catch (e) {
+                    console.error("Mermaid error", e);
+                    mermaidContainer.innerText = "Error rendering diagram: " + e.message;
+                }
+            } else {
+                document.getElementById('mermaid-container').style.display = 'none';
+                canvasContent.style.display = 'block';
+                canvasContent.innerText = data.content;
+            }
         }
     </script>
 </body>

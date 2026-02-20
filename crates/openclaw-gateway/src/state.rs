@@ -64,7 +64,7 @@ impl AppState {
         let voice = VoiceService::new(&config);
 
         let memory_ref = memory.clone();
-        let mut skills = default_skills();
+        let mut skills = default_skills(config.agent.github_token.clone(), config.agent.obsidian_path.clone());
         if let Some(ref mem) = memory_ref {
             skills.register(Box::new(crate::skills::MemorySkill::new(Some(Arc::new(mem.clone())))));
         }
@@ -99,7 +99,7 @@ impl AppState {
         let provider = create_provider_with_fallback(&config.models.providers);
 
         let cron = Arc::new(CronScheduler::new());
-        let skills = default_skills();
+        let skills = default_skills(config.agent.github_token.clone(), config.agent.obsidian_path.clone());
 
         let state = Arc::new(Self {
             config: config.clone(),

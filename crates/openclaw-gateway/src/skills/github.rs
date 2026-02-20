@@ -1,10 +1,40 @@
 use async_trait::async_trait;
 use openclaw_core::provider::ToolDefinition;
-use serde_json::json;
+use serde_json::{json, Value};
+use reqwest::Client;
 
 use super::Skill;
 
-pub struct GitHubSkill;
+pub struct GitHubSkill {
+    client: Client,
+    token: Option<String>,
+}
+
+impl GitHubSkill {
+    pub fn new(token: Option<String>) -> Self {
+        Self {
+            client: Client::builder()
+                .user_agent("OpenClaw/0.1.0")
+                .build()
+                .unwrap_or_default(),
+            token,
+        }
+    }
+
+    async fn api_get(&self, url: &str) -> Result<Value, String> {
+        let mut req = self.client.get(url);
+        if let Some(token) = &self.token {
+            req = req.header("Authorization", format!("Bearer {}", token));
+        }
+        
+        let res = req.send().await.map_err(|e| e.to_string())?;
+        if !res.status().is_success() {
+            return Err(format!("GitHub API error {}: {}", res.status(), res.text().await.unwrap_or_default()));
+        }
+        
+        res.json().await.map_err(|e| e.to_string())
+    }
+}
 
 #[async_trait]
 impl Skill for GitHubSkill {
@@ -17,7 +47,7 @@ impl Skill for GitHubSkill {
     }
     
     fn version(&self) -> &str {
-        "1.0.0"
+        "1.1.0"
     }
     
     fn tools(&self) -> Vec<ToolDefinition> {
@@ -36,29 +66,15 @@ impl Skill for GitHubSkill {
                 }),
             },
             ToolDefinition {
-                name: "github_create_issue".to_string(),
-                description: "Create a new issue in a GitHub repository".to_string(),
+                name: "github_get_repo".to_string(),
+                description: "Get information about a GitHub repository".to_string(),
                 parameters: json!({
                     "type": "object",
                     "properties": {
                         "owner": { "type": "string", "description": "Repository owner" },
-                        "repo": { "type": "string", "description": "Repository name" },
-                        "title": { "type": "string", "description": "Issue title" },
-                        "body": { "type": "string", "description": "Issue body" }
+                        "repo": { "type": "string", "description": "Repository name" }
                     },
-                    "required": ["owner", "repo", "title"]
-                }),
-            },
-            ToolDefinition {
-                name: "github_search_code".to_string(),
-                description: "Search for code in GitHub repositories".to_string(),
-                parameters: json!({
-                    "type": "object",
-                    "properties": {
-                        "query": { "type": "string", "description": "Search query" },
-                        "language": { "type": "string", "description": "Language filter" }
-                    },
-                    "required": ["query"]
+                    "required": ["owner", "repo"]
                 }),
             },
         ]
@@ -70,23 +86,45 @@ impl Skill for GitHubSkill {
                 let owner = args["owner"].as_str().ok_or("Missing owner")?;
                 let repo = args["repo"].as_str().ok_or("Missing repo")?;
                 let state = args.get("state").and_then(|v| v.as_str()).unwrap_or("open");
-                Ok(format!("Issues for {}/{} ({}):\n- #1: Example issue (open)\n- #2: Bug fix needed (open)", owner, repo, state))
+                
+                let url = format!("https://api.github.com/repos/{}/{}/issues?state={}", owner, repo, state);
+                let issues = self.api_get(&url).await?;
+                
+                let mut out = format!("Issues for {}/{}:\n", owner, repo);
+                if let Some(arr) = issues.as_array() {
+                    for issue in arr.iter().take(10) {
+                        let number = issue["number"].as_u64().unwrap_or(0);
+                        let title = issue["title"].as_str().unwrap_or("No title");
+                        let user = issue["user"]["login"].as_str().unwrap_or("unknown");
+                        out.push_str(&format!("- #{} {} (by {})\n", number, title, user));
+                    }
+                    if arr.len() > 10 {
+                        out.push_str("... and more\n");
+                    }
+                }
+                Ok(out)
             }
-            "github_create_issue" => {
+            "github_get_repo" => {
                 let owner = args["owner"].as_str().ok_or("Missing owner")?;
                 let repo = args["repo"].as_str().ok_or("Missing repo")?;
-                let title = args["title"].as_str().ok_or("Missing title")?;
-                Ok(format!("Created issue '{}' in {}/{}", title, owner, repo))
-            }
-            "github_search_code" => {
-                let query = args["query"].as_str().ok_or("Missing query")?;
-                Ok(format!("Search results for '{}':\n- file.rs:10 - matching line\n- lib.ts:5 - matching line", query))
+                
+                let url = format!("https://api.github.com/repos/{}/{}", owner, repo);
+                let data = self.api_get(&url).await?;
+                
+                let desc = data["description"].as_str().unwrap_or("No description");
+                let stars = data["stargazers_count"].as_u64().unwrap_or(0);
+                let lang = data["language"].as_str().unwrap_or("Unknown");
+                
+                Ok(format!(
+                    "Repository: {}/{}\nDescription: {}\nLanguage: {}\nStars: {}\nLink: {}",
+                    owner, repo, desc, lang, stars, data["html_url"].as_str().unwrap_or("")
+                ))
             }
             _ => Err("Unknown tool".to_string())
         }
     }
     
     fn system_prompt(&self) -> Option<&str> {
-        Some("You can interact with GitHub repositories. Use the GitHub tools to:\n- List and create issues\n- Search code\n- Get repository information\n\nFormat owner/repo as 'owner/repo'.")
+        Some("You can interact with GitHub repositories. Use the GitHub tools to:\n- List and create issues\n- Get repository information\n\nFormat owner/repo as 'owner/repo'.")
     }
 }

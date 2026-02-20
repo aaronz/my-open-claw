@@ -105,16 +105,16 @@ pub use spotify::SpotifySkill;
 pub use obsidian::ObsidianSkill;
 pub use memory::MemorySkill;
 
-pub fn default_skills() -> SkillRegistry {
+pub fn default_skills(github_token: Option<String>, obsidian_path: Option<String>) -> SkillRegistry {
     let mut registry = SkillRegistry::new();
     
     registry.register(Box::new(WeatherSkill));
-    registry.register(Box::new(GitHubSkill));
+    registry.register(Box::new(GitHubSkill::new(github_token)));
     registry.register(Box::new(SlackSkill));
     registry.register(Box::new(DiscordSkill));
     registry.register(Box::new(NotesSkill));
     registry.register(Box::new(SpotifySkill));
-    registry.register(Box::new(ObsidianSkill));
+    registry.register(Box::new(ObsidianSkill::new(obsidian_path)));
     registry.register(Box::new(MemorySkill::new(None)));
     
     registry

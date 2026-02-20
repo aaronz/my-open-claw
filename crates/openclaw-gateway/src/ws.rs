@@ -30,6 +30,14 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     state.ws_clients.insert(client_id, tx.clone());
     info!(client_id = %client_id, "ws client connected");
 
+    let presence_msg = WsMessage::PresenceUpdate {
+        channel: ChannelKind::WebChat,
+        status: openclaw_core::message::PresenceStatus::Online,
+    };
+    if let Ok(json) = serde_json::to_string(&presence_msg) {
+        state.broadcast(&json);
+    }
+
     let (mut ws_sink, mut ws_stream) = socket.split();
     let mut broadcast_rx = tx.subscribe();
 
@@ -57,6 +65,15 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     sink_task.abort();
     state.ws_clients.remove(&client_id);
     state.subscriptions.remove(&client_id);
+
+    let presence_msg = WsMessage::PresenceUpdate {
+        channel: ChannelKind::WebChat,
+        status: openclaw_core::message::PresenceStatus::Offline,
+    };
+    if let Ok(json) = serde_json::to_string(&presence_msg) {
+        state.broadcast(&json);
+    }
+
     info!(client_id = %client_id, "ws client disconnected");
 }
 

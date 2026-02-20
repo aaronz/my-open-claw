@@ -16,12 +16,13 @@ A powerful, multi-channel, autonomous AI agent gateway written in Rust. Port of 
     -   **Web/CLI**: Real-time WebSocket interface with Artifact support.
 -   **🛠️ Tools & Capabilities**:
     -   **Browser Control**: Headless Chrome for web interaction and data extraction.
-    -   **Canvas**: Persistent visual workspace for code, documents, and charts.
+    -   **Canvas**: Persistent visual workspace for code, documents, and charts (with Mermaid diagram support).
+    -   **YouTube Search**: Find and display video information directly.
     -   **Web Search**: Real-time information via Tavily.
     -   **Code Interpreter**: Safe(ish) Python execution for calculations and logic.
 -   **🧩 Skills System**:
-    -   **GitHub**: Manage issues and search code.
-    -   **Obsidian**: Read/write vault notes.
+    -   **GitHub**: Manage issues and get repository information (authenticated).
+    -   **Obsidian**: Read and update your local vault notes.
     -   **Spotify**: Control playback and search music.
     -   **Notes**: Apple Notes integration.
     -   **Custom Skills**: Easily extensible via the Skill trait.
@@ -31,6 +32,7 @@ A powerful, multi-channel, autonomous AI agent gateway written in Rust. Port of 
     -   **Persistence**: Session state saved to disk.
 -   **🛡️ Reliability**:
     -   **Model Failover**: Automatically rotates through providers on failure.
+    -   **Presence**: Real-time online/offline status updates.
     -   **OAuth**: Secure skill authentication infrastructure.
 -   **🤖 Headless Autonomy**: Webhook endpoint (`/api/webhook`) triggers agent logic autonomously.
 -   **🐳 Production Ready**: Docker & Docker Compose support.

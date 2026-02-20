@@ -1,10 +1,22 @@
 use async_trait::async_trait;
 use openclaw_core::provider::ToolDefinition;
 use serde_json::json;
+use std::fs;
+use std::path::PathBuf;
 
 use super::Skill;
 
-pub struct ObsidianSkill;
+pub struct ObsidianSkill {
+    vault_path: Option<PathBuf>,
+}
+
+impl ObsidianSkill {
+    pub fn new(path: Option<String>) -> Self {
+        Self {
+            vault_path: path.map(PathBuf::from),
+        }
+    }
+}
 
 #[async_trait]
 impl Skill for ObsidianSkill {
@@ -17,7 +29,11 @@ impl Skill for ObsidianSkill {
     }
     
     fn version(&self) -> &str {
-        "1.0.0"
+        "1.1.0"
+    }
+
+    fn is_enabled(&self) -> bool {
+        self.vault_path.is_some()
     }
     
     fn tools(&self) -> Vec<ToolDefinition> {
@@ -28,7 +44,7 @@ impl Skill for ObsidianSkill {
                 parameters: json!({
                     "type": "object",
                     "properties": {
-                        "path": { "type": "string", "description": "Note path (without .md)" }
+                        "path": { "type": "string", "description": "Note path (e.g. 'Daily/2026-02-20')" }
                     },
                     "required": ["path"]
                 }),
@@ -41,59 +57,50 @@ impl Skill for ObsidianSkill {
                     "properties": {
                         "path": { "type": "string", "description": "Note path" },
                         "content": { "type": "string", "description": "Note content" },
-                        "append": { "type": "boolean", "description": "Append to existing note" }
+                        "append": { "type": "boolean", "description": "Append to existing note", "default": false }
                     },
                     "required": ["path", "content"]
-                }),
-            },
-            ToolDefinition {
-                name: "obsidian_search".to_string(),
-                description: "Search notes in the vault".to_string(),
-                parameters: json!({
-                    "type": "object",
-                    "properties": {
-                        "query": { "type": "string", "description": "Search query" }
-                    },
-                    "required": ["query"]
-                }),
-            },
-            ToolDefinition {
-                name: "obsidian_list".to_string(),
-                description: "List notes in a folder".to_string(),
-                parameters: json!({
-                    "type": "object",
-                    "properties": {
-                        "folder": { "type": "string", "description": "Folder path" }
-                    },
                 }),
             },
         ]
     }
     
     async fn execute_tool(&self, name: &str, args: serde_json::Value) -> Result<String, String> {
+        let vault = self.vault_path.as_ref().ok_or("Obsidian vault path not configured")?;
+        
         match name {
             "obsidian_read" => {
-                let path = args["path"].as_str().ok_or("Missing path")?;
-                Ok(format!("Content of {}.md:\n\n# {}\n\nNote content goes here.", path, path))
+                let path_str = args["path"].as_str().ok_or("Missing path")?;
+                let full_path = vault.join(format!("{}.md", path_str));
+                
+                let content = fs::read_to_string(full_path).map_err(|e| format!("Read failed: {}", e))?;
+                Ok(content)
             }
             "obsidian_write" => {
-                let path = args["path"].as_str().ok_or("Missing path")?;
+                let path_str = args["path"].as_str().ok_or("Missing path")?;
                 let content = args["content"].as_str().ok_or("Missing content")?;
-                Ok(format!("Wrote to {}.md: {} bytes written", path, content.len()))
-            }
-            "obsidian_search" => {
-                let query = args["query"].as_str().ok_or("Missing query")?;
-                Ok(format!("Search results for '{}':\n- notes/project-ideas.md\n- notes/meeting-notes.md", query))
-            }
-            "obsidian_list" => {
-                let folder = args.get("folder").and_then(|v| v.as_str()).unwrap_or("/");
-                Ok(format!("Notes in {}:\n- note1.md\n- note2.md\n- subfolder/note3.md", folder))
+                let append = args["append"].as_bool().unwrap_or(false);
+                
+                let full_path = vault.join(format!("{}.md", path_str));
+                
+                if let Some(parent) = full_path.parent() {
+                    fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+                }
+                
+                if append {
+                    let mut existing = fs::read_to_string(&full_path).unwrap_or_default();
+                    if !existing.is_empty() && !existing.ends_with('\n') {
+                        existing.push('\n');
+                    }
+                    existing.push_str(content);
+                    fs::write(full_path, existing).map_err(|e| e.to_string())?;
+                } else {
+                    fs::write(full_path, content).map_err(|e| e.to_string())?;
+                }
+                
+                Ok(format!("Successfully wrote to {}", path_str))
             }
             _ => Err("Unknown tool".to_string())
         }
-    }
-    
-    fn system_prompt(&self) -> Option<&str> {
-        Some("You can read and write notes in an Obsidian vault. Use this to:\n- Create and update notes\n- Search across your knowledge base\n- Link related concepts together")
     }
 }

@@ -100,6 +100,8 @@ pub struct AgentConfig {
     pub thinking: ThinkingLevel,
     pub max_tokens: Option<u32>,
     pub tavily_api_key: Option<String>,
+    pub github_token: Option<String>,
+    pub obsidian_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

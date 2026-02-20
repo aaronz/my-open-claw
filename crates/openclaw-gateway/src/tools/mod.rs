@@ -4,6 +4,7 @@ pub mod fs;
 pub mod python;
 pub mod search;
 pub mod weather;
+pub mod youtube;
 
 use openclaw_core::{AppConfig, Tool};
 use std::collections::HashMap;
@@ -28,6 +29,9 @@ pub fn default_tools(config: &AppConfig, _cron: Arc<CronScheduler>, state: Arc<A
 
     let canvas = canvas::CanvasTool::new(state);
     tools.insert(canvas.definition().name, Box::new(canvas));
+
+    let youtube = youtube::YouTubeTool::new();
+    tools.insert(youtube.definition().name, Box::new(youtube));
 
     if let Some(key) = &config.agent.tavily_api_key {
         let search = search::SearchTool::new(key.clone());
