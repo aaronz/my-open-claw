@@ -60,6 +60,13 @@ pub enum WsMessage {
         channel: ChannelKind,
         status: PresenceStatus,
     },
+    CanvasUpdate {
+        session_id: Uuid,
+        id: String,
+        content: String,
+        language: Option<String>,
+        title: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

@@ -135,7 +135,7 @@ pub async fn run_agent_cycle(state: Arc<AppState>, session_id: Uuid) {
             }
         });
 
-        let tools: Vec<_> = state.tools.values().map(|t| t.definition()).collect();
+        let tools: Vec<_> = state.tools.iter().map(|t| t.value().definition()).collect();
         let skill_tools = state.skills.all_tools();
         let mut all_tools = tools;
         all_tools.extend(skill_tools);

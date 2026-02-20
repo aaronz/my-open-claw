@@ -7,6 +7,7 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
+use crate::auth::oauth::OAuthManager;
 use crate::cron::CronScheduler;
 use crate::memory::service::MemoryService;
 use crate::provider::create_provider_with_fallback;
@@ -20,7 +21,7 @@ pub struct AppState {
     pub ws_clients: DashMap<Uuid, broadcast::Sender<String>>,
     pub subscriptions: DashMap<Uuid, HashSet<Uuid>>,
     pub provider: Option<Arc<dyn Provider>>,
-    pub tools: HashMap<String, Box<dyn Tool>>,
+    pub tools: DashMap<String, Box<dyn Tool>>,
     pub channels: DashMap<ChannelKind, Arc<dyn Channel>>,
     pub memory: Option<MemoryService>,
     pub voice: Option<VoiceService>,
@@ -28,6 +29,7 @@ pub struct AppState {
     pub workspace_prompt: Option<String>,
     pub start_time: DateTime<Utc>,
     pub skills: SkillRegistry,
+    pub oauth: Arc<OAuthManager>,
 }
 
 impl AppState {
@@ -46,8 +48,6 @@ impl AppState {
             .unwrap_or_else(|_| SessionStore::new());
 
         let cron = Arc::new(CronScheduler::new());
-        // Pass cron to tools?
-        let tools = default_tools(&config, cron.clone());
 
         let memory = if config.memory.enabled {
             match MemoryService::new(&config).await {
@@ -69,21 +69,29 @@ impl AppState {
             skills.register(Box::new(crate::skills::MemorySkill::new(Some(Arc::new(mem.clone())))));
         }
 
-        Arc::new(Self {
-            config,
+        let state = Arc::new(Self {
+            config: config.clone(),
             sessions,
             ws_clients: DashMap::new(),
             subscriptions: DashMap::new(),
             provider,
-            tools,
+            tools: DashMap::new(),
             channels: DashMap::new(),
             memory,
             voice,
-            cron,
+            cron: cron.clone(),
             workspace_prompt,
             start_time: Utc::now(),
             skills,
-        })
+            oauth: Arc::new(OAuthManager::new()),
+        });
+
+        let tools = default_tools(&config, cron.clone(), state.clone());
+        for (name, tool) in tools {
+            state.tools.insert(name, tool);
+        }
+
+        state
     }
 
     /// In-memory only — no disk persistence or workspace prompt loading.
@@ -91,25 +99,31 @@ impl AppState {
         let provider = create_provider_with_fallback(&config.models.providers);
 
         let cron = Arc::new(CronScheduler::new());
-        let tools = default_tools(&config, cron.clone());
-
         let skills = default_skills();
 
-        Arc::new(Self {
-            config,
+        let state = Arc::new(Self {
+            config: config.clone(),
             sessions: SessionStore::new(),
             ws_clients: DashMap::new(),
             subscriptions: DashMap::new(),
             provider,
-            tools,
+            tools: DashMap::new(),
             channels: DashMap::new(),
             memory: None,
             voice: None,
-            cron,
+            cron: cron.clone(),
             workspace_prompt: None,
             start_time: Utc::now(),
             skills,
-        })
+            oauth: Arc::new(OAuthManager::new()),
+        });
+
+        let tools = default_tools(&config, cron.clone(), state.clone());
+        for (name, tool) in tools {
+            state.tools.insert(name, tool);
+        }
+
+        state
     }
 
     pub fn effective_system_prompt(&self) -> Option<String> {

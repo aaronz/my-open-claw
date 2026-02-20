@@ -26,6 +26,9 @@ tokio-tungstenite = { workspace = true }
 qdrant-client = "1.10"
 fastembed = "4"
 anyhow = "1"
+chromiumoxide = { workspace = true }
+image = { workspace = true }
+base64 = { workspace = true }
 
 [dev-dependencies]
 reqwest = { workspace = true }

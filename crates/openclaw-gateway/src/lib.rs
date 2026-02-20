@@ -14,6 +14,7 @@ pub mod ws;
 use crate::channels::discord::DiscordChannel;
 use crate::channels::slack::SlackChannel;
 use crate::channels::telegram::TelegramChannel;
+use crate::channels::whatsapp::WhatsAppChannel;
 use axum::middleware;
 use axum::routing::get;
 use axum::Router;
@@ -104,6 +105,29 @@ pub async fn start_gateway(config: AppConfig) -> openclaw_core::Result<()> {
                     }
                     Err(e) => {
                         tracing::error!("Failed to start Slack channel: {}", e);
+                    }
+                }
+            }
+        }
+    }
+
+    if let Some(whatsapp_config) = &state.config.channels.whatsapp {
+        if whatsapp_config.enabled {
+            if let (Some(token), Some(phone_id)) =
+                (&whatsapp_config.token, &whatsapp_config.app_token)
+            {
+                let channel = WhatsAppChannel::new(
+                    token.clone(),
+                    phone_id.clone(),
+                    Arc::downgrade(&state),
+                );
+                match channel.start().await {
+                    Ok(_) => {
+                        info!("WhatsApp channel started");
+                        state.channels.insert(ChannelKind::WhatsApp, Arc::new(channel));
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to start WhatsApp channel: {}", e);
                     }
                 }
             }
