@@ -12,11 +12,16 @@ use uuid::Uuid;
 
 pub fn api_router() -> Router<Arc<AppState>> {
     Router::new()
+        .route("/", get(index_html))
         .route("/health", get(health))
         .route("/api/sessions", get(list_sessions))
         .route("/api/config", get(get_config))
         .route("/api/status", get(status))
         .route("/api/webhook", post(webhook))
+}
+
+async fn index_html() -> impl axum::response::IntoResponse {
+    axum::response::Html(include_str!("static/index.html"))
 }
 
 async fn health(State(state): State<Arc<AppState>>) -> Json<Value> {

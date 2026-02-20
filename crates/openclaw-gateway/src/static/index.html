@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenClaw Chat</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background: #f0f2f5; display: flex; flex-direction: column; height: 95vh; }
+        h1 { text-align: center; color: #333; margin-bottom: 20px; }
+        #chat { flex: 1; overflow-y: scroll; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); display: flex; flex-direction: column; gap: 12px; }
+        .msg { padding: 12px 16px; border-radius: 18px; max-width: 80%; line-height: 1.5; word-wrap: break-word; }
+        .user { align-self: flex-end; background: #0084ff; color: white; border-bottom-right-radius: 4px; }
+        .assistant { align-self: flex-start; background: #e4e6eb; color: #050505; border-bottom-left-radius: 4px; }
+        .system { align-self: center; color: #65676b; font-size: 0.85em; margin: 8px 0; }
+        .thinking { align-self: flex-start; color: #65676b; font-style: italic; font-size: 0.9em; margin-left: 10px; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+        #input-area { margin-top: 20px; display: flex; gap: 10px; }
+        input { flex: 1; padding: 15px; border: 1px solid #ddd; border-radius: 24px; font-size: 16px; outline: none; transition: border 0.2s; }
+        input:focus { border-color: #0084ff; }
+        button { padding: 0 25px; background: #0084ff; color: white; border: none; border-radius: 24px; font-weight: bold; cursor: pointer; transition: background 0.2s; }
+        button:hover { background: #0073e6; }
+    </style>
+</head>
+<body>
+    <h1>🦞 OpenClaw</h1>
+    <div id="chat"></div>
+    <div id="input-area">
+        <input type="text" id="msg" placeholder="Type a message..." autofocus autocomplete="off">
+        <button onclick="send()">Send</button>
+    </div>
+
+    <script>
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws`);
+        const chat = document.getElementById('chat');
+        const input = document.getElementById('msg');
+        let currentResponse = null;
+        let thinkingEl = null;
+
+        // Generate a random peer ID for this session
+        const peerId = 'web-' + Math.random().toString(36).substr(2, 9);
+
+        ws.onopen = () => {
+            console.log('Connected');
+            addSystem("Connected to Gateway");
+        };
+
+        ws.onclose = () => {
+            addSystem("Disconnected from Gateway");
+        };
+
+        ws.onmessage = (event) => {
+            const msg = JSON.parse(event.data);
+            
+            if (msg.type === 'agent_thinking') {
+                showThinking();
+            } else if (msg.type === 'agent_response') {
+                hideThinking();
+                if (!currentResponse) {
+                    currentResponse = addMessage('assistant', '');
+                }
+                currentResponse.innerText += msg.content;
+                chat.scrollTop = chat.scrollHeight;
+                if (msg.done) {
+                    currentResponse = null;
+                }
+            } else if (msg.type === 'new_message') {
+                // If it's from us (based on content match heuristic or if we tracked ID), ignore?
+                // The gateway broadcasts everything.
+                // But we add our own message to UI immediately for responsiveness.
+                // So we can ignore `new_message` if it looks like ours?
+                // Actually, `new_message` has `session_id`.
+                // For simplicity, we just ignore `new_message` for now and rely on local echo + agent_response.
+                // Proper way: wait for ACK. But this is simple UI.
+            } else if (msg.type === 'error') {
+                addSystem("Error: " + msg.message);
+            }
+        };
+
+        function send() {
+            const text = input.value.trim();
+            if (!text) return;
+            
+            addMessage('user', text);
+            ws.send(JSON.stringify({
+                type: 'send_message',
+                content: text,
+                channel: 'web',
+                peer_id: peerId
+            }));
+            input.value = '';
+        }
+
+        input.onkeydown = (e) => {
+            if (e.key === 'Enter') send();
+        };
+
+        function addMessage(role, text) {
+            const div = document.createElement('div');
+            div.className = `msg ${role}`;
+            div.innerText = text;
+            chat.appendChild(div);
+            chat.scrollTop = chat.scrollHeight;
+            return div;
+        }
+
+        function addSystem(text) {
+            const div = document.createElement('div');
+            div.className = 'system';
+            div.innerText = text;
+            chat.appendChild(div);
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+        function showThinking() {
+            if (thinkingEl) return;
+            thinkingEl = document.createElement('div');
+            thinkingEl.className = 'thinking';
+            thinkingEl.innerText = 'Thinking...';
+            chat.appendChild(thinkingEl);
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+        function hideThinking() {
+            if (thinkingEl) {
+                thinkingEl.remove();
+                thinkingEl = null;
+            }
+        }
+    </script>
+</body>
+</html>

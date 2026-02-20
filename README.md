@@ -1,88 +1,116 @@
 # OpenClaw 🦞
 
-Rust port of [OpenClaw](https://github.com/openclaw/openclaw) — a personal AI assistant with WebSocket gateway, multi-channel inbox, and CLI.
+A powerful, multi-channel, autonomous AI agent gateway written in Rust. Port of the original [OpenClaw](https://github.com/openclaw/openclaw).
 
-## Architecture
+## ✨ Features
 
-```
-crates/
-├── openclaw-core/       # Shared types: config, session, message protocol, channel trait, provider trait, errors
-├── openclaw-gateway/    # axum WebSocket + HTTP server (control plane) with AI provider streaming
-└── openclaw-cli/        # Binary `openclaw` — clap-based CLI with WS client
-```
+-   **🧠 Multi-LLM Support**: OpenAI, Anthropic (Claude), Google Gemini.
+-   **🗣️ Multi-Modal**:
+    -   **Voice**: Automatic STT (Whisper) and TTS (OpenAI Audio). Speak to your bot, it speaks back.
+    -   **Vision**: Send images to the agent (Discord/URL).
+-   **🔌 Multi-Channel**:
+    -   **Telegram**: Full support (Text, Voice, Groups).
+    -   **Discord**: Full support (Text, Voice, Images, Threads).
+    -   **Slack**: Inbound/Outbound via Socket Mode.
+    -   **Web/CLI**: Real-time WebSocket interface.
+-   **🛠️ Tools & Capabilities**:
+    -   **Web Search**: Real-time information via Tavily.
+    -   **Code Interpreter**: Safe(ish) Python execution for calculations and logic.
+    -   **Weather**: Built-in weather lookup.
+-   **💾 Long-term Memory**:
+    -   **Vector RAG**: Stores every interaction in Qdrant (local Docker).
+    -   **Context Compaction**: Automatically summarizes long conversations to save tokens.
+    -   **Persistence**: Session state saved to disk.
+-   **🤖 Headless Autonomy**: Webhook endpoint (`/api/webhook`) triggers agent logic autonomously.
+-   **🐳 Production Ready**: Docker & Docker Compose support.
 
-## Quick Start
+## 🚀 Quick Start (Docker)
+
+1.  **Configure**: Edit `docker-compose.yml` or `config/config.yaml` (see Configuration below).
+2.  **Run**:
+    ```bash
+    docker-compose up -d
+    ```
+3.  **Chat**: Use the CLI or connect your Telegram/Discord bot.
+
+## 🛠️ Manual Installation
+
+Requirements: Rust 1.75+, `libclang` (for some crates), Docker (for Qdrant).
 
 ```bash
-# Build
-cargo build
+# 1. Start Vector DB
+docker run -p 6333:6333 qdrant/qdrant
 
-# Interactive setup (provider, API key, model)
+# 2. Configure (Wizard)
 cargo run -p openclaw-cli -- onboard
 
-# Start the gateway
+# 3. Start Gateway
 cargo run -p openclaw-cli -- gateway
-
-# Send a message (requires running gateway)
-cargo run -p openclaw-cli -- agent --message "hello"
-
-# Run diagnostics
-cargo run -p openclaw-cli -- doctor
-
-# Run tests
-cargo test
 ```
 
-## Features
+## ⚙️ Configuration
 
-- **AI Provider Integration** — Anthropic (Claude) and OpenAI (GPT) with SSE streaming
-- **WebSocket Gateway** — Real-time message protocol with JSON-tagged enums
-- **Per-Session Routing** — Clients subscribe to sessions; messages route only to subscribers
-- **Auth Middleware** — Optional password or token auth on WS + HTTP endpoints
-- **Multi-Channel** — Telegram, Discord, Slack, WhatsApp, Signal, WebChat channel trait
-- **CLI** — Interactive onboard wizard, gateway management, agent chat, diagnostics
-- **YAML Config** — Sensible defaults, optional config file, secret redaction on API
-
-## Configuration
-
-Config file location: `~/Library/Application Support/ai.openclaw.openclaw/config.yaml` (macOS)
+Location: `config.yaml` (in `~/.config/openclaw` or local `config/`).
 
 ```yaml
 gateway:
   port: 18789
-  bind: loopback
-  auth:
-    mode: none  # none | password | token
+  auth: { mode: none } # or 'token'
+
 models:
-  default_model: claude-sonnet-4-20250514
+  default_model: gpt-4o
   providers:
-    - name: anthropic
-      model: claude-sonnet-4-20250514
+    - name: openai
+      model: gpt-4o
       api_key: sk-...
+    - name: anthropic
+      model: claude-3-5-sonnet-20240620
+      api_key: sk-ant-...
+    - name: gemini
+      model: gemini-1.5-pro
+      api_key: ...
+
+channels:
+  telegram:
+    enabled: true
+    token: "YOUR_BOT_TOKEN"
+  discord:
+    enabled: true
+    token: "YOUR_BOT_TOKEN"
+  slack:
+    enabled: true
+    token: "xoxb-..."
+    app_token: "xapp-..."
+
 agent:
-  system_prompt: "You are a helpful assistant."
-  thinking: medium
+  system_prompt: "You are OpenClaw."
+  tavily_api_key: "tvly-..." # Enable Web Search
+
+audio:
+  enabled: true # Enable Voice (STT/TTS)
+  openai_api_key: "sk-..."
+
+memory:
+  enabled: true
+  qdrant_url: "http://localhost:6333"
 ```
 
-## WebSocket Protocol
+## 📚 Tools
 
-All messages are JSON with `"type"` tag:
+The agent can use these tools automatically:
+-   `web_search(query)`: Search the internet.
+-   `python_interpreter(code)`: Execute Python code.
+-   `get_weather(location)`: Check weather.
 
-```json
-{"type": "send_message", "content": "hello", "session_id": null, "channel": null, "peer_id": "cli"}
-{"type": "agent_thinking", "session_id": "..."}
-{"type": "agent_response", "session_id": "...", "content": "token", "done": false}
-{"type": "agent_response", "session_id": "...", "content": "full response", "done": true}
-```
+## 🧠 Memory & RAG
 
-## HTTP API
+OpenClaw uses **Qdrant** for vector memory. It embeds all conversations locally using **FastEmbed** (no API cost for embeddings) and retrieves relevant context before answering.
 
-| Endpoint | Description |
-|----------|-------------|
-| `GET /health` | Health check with uptime |
-| `GET /api/sessions` | List all sessions |
-| `GET /api/config` | Config (secrets redacted) |
-| `GET /api/status` | Server status |
+## 📡 API Endpoints
+
+-   `WS  /ws`: Real-time chat protocol.
+-   `POST /api/webhook`: Trigger agent from external sources.
+-   `GET /api/status`: System status.
 
 ## License
 
