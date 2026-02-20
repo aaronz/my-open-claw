@@ -10,6 +10,7 @@ use uuid::Uuid;
 use crate::memory::service::MemoryService;
 use crate::provider::create_provider;
 use crate::tools::default_tools;
+use crate::voice::service::VoiceService;
 
 pub struct AppState {
     pub config: AppConfig,
@@ -20,6 +21,7 @@ pub struct AppState {
     pub tools: HashMap<String, Box<dyn Tool>>,
     pub channels: DashMap<ChannelKind, Arc<dyn Channel>>,
     pub memory: Option<MemoryService>,
+    pub voice: Option<VoiceService>,
     pub workspace_prompt: Option<String>,
     pub start_time: DateTime<Utc>,
 }
@@ -57,6 +59,8 @@ impl AppState {
             None
         };
 
+        let voice = VoiceService::new(&config);
+
         Arc::new(Self {
             config,
             sessions,
@@ -66,6 +70,7 @@ impl AppState {
             tools,
             channels: DashMap::new(),
             memory,
+            voice,
             workspace_prompt,
             start_time: Utc::now(),
         })
@@ -90,6 +95,7 @@ impl AppState {
             tools,
             channels: DashMap::new(),
             memory: None,
+            voice: None,
             workspace_prompt: None,
             start_time: Utc::now(),
         })

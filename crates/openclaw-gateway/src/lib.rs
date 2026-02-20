@@ -7,6 +7,7 @@ pub mod provider;
 pub mod routes;
 pub mod state;
 pub mod tools;
+pub mod voice;
 pub mod ws;
 
 use crate::channels::discord::DiscordChannel;

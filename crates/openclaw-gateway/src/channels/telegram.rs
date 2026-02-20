@@ -44,11 +44,33 @@ struct Update {
 struct Message {
     chat: Chat,
     text: Option<String>,
+    voice: Option<Voice>,
+    audio: Option<Audio>,
+}
+
+#[derive(Deserialize)]
+struct Voice {
+    file_id: String,
+}
+
+#[derive(Deserialize)]
+struct Audio {
+    file_id: String,
 }
 
 #[derive(Deserialize)]
 struct Chat {
     id: i64,
+}
+
+#[derive(Deserialize)]
+struct FileResponse {
+    result: FileInfo,
+}
+
+#[derive(Deserialize)]
+struct FileInfo {
+    file_path: String,
 }
 
 #[async_trait]
@@ -105,41 +127,65 @@ impl Channel for TelegramChannel {
                                     offset = update.update_id + 1;
                                     
                                     if let Some(msg) = update.message {
-                                        if let Some(text) = msg.text {
-                                            let peer_id = msg.chat.id.to_string();
-                                            
-                                            // Process message
-                                            let session = state.sessions.get_or_create(channel_kind.clone(), &peer_id);
-                                            let session_id = session.id;
-                                            drop(session); // release lock before async
-
-                                            let user_msg = ChatMessage {
-                                                id: Uuid::new_v4(),
-                                                role: Role::User,
-                                                content: text.clone(),
-                                                timestamp: chrono::Utc::now(),
-                                                channel: channel_kind.clone(),
-                                                images: vec![],
-                                                tool_calls: vec![],
-                                                tool_result: None,
-                                            };
-                                            let _ = state.sessions.add_message(&session_id, user_msg.clone());
-
-                                            // Broadcast
-                                            let new_msg = WsMessage::NewMessage {
-                                                session_id,
-                                                message: user_msg,
-                                            };
-                                            if let Ok(json) = serde_json::to_string(&new_msg) {
-                                                state.broadcast(&json);
+                                        let mut content = msg.text.unwrap_or_default();
+                                        
+                                        // Handle Voice
+                                        if let Some(file_id) = msg.voice.map(|v| v.file_id).or(msg.audio.map(|a| a.file_id)) {
+                                            if let Some(voice_service) = &state.voice {
+                                                let file_url = format!("https://api.telegram.org/bot{}/getFile?file_id={}", token, file_id);
+                                                if let Ok(file_resp) = client.get(&file_url).send().await {
+                                                    if let Ok(file_json) = file_resp.json::<FileResponse>().await {
+                                                        let download_url = format!("https://api.telegram.org/file/bot{}/{}", token, file_json.result.file_path);
+                                                        if let Ok(dl_resp) = client.get(&download_url).send().await {
+                                                            if let Ok(bytes) = dl_resp.bytes().await {
+                                                                // Telegram OGG or MP3
+                                                                if let Ok(text) = voice_service.transcribe(bytes.to_vec(), "voice.ogg").await {
+                                                                    if !content.is_empty() {
+                                                                        content.push('\n');
+                                                                    }
+                                                                    content.push_str(&format!("[Voice Transcription]: {}", text));
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
                                             }
-
-                                            // Trigger Agent
-                                            let spawn_state = Arc::clone(&state);
-                                            tokio::spawn(async move {
-                                                run_agent_cycle(spawn_state, session_id).await;
-                                            });
                                         }
+
+                                        if content.is_empty() {
+                                            continue;
+                                        }
+
+                                        let peer_id = msg.chat.id.to_string();
+                                        
+                                        let session = state.sessions.get_or_create(channel_kind.clone(), &peer_id);
+                                        let session_id = session.id;
+                                        drop(session); 
+
+                                        let user_msg = ChatMessage {
+                                            id: Uuid::new_v4(),
+                                            role: Role::User,
+                                            content: content.clone(),
+                                            timestamp: chrono::Utc::now(),
+                                            channel: channel_kind.clone(),
+                                            images: vec![],
+                                            tool_calls: vec![],
+                                            tool_result: None,
+                                        };
+                                        let _ = state.sessions.add_message(&session_id, user_msg.clone());
+
+                                        let new_msg = WsMessage::NewMessage {
+                                            session_id,
+                                            message: user_msg,
+                                        };
+                                        if let Ok(json) = serde_json::to_string(&new_msg) {
+                                            state.broadcast(&json);
+                                        }
+
+                                        let spawn_state = Arc::clone(&state);
+                                        tokio::spawn(async move {
+                                            run_agent_cycle(spawn_state, session_id).await;
+                                        });
                                     }
                                 }
                             }

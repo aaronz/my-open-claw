@@ -12,6 +12,8 @@ pub struct AppConfig {
     #[serde(default)]
     pub agent: AgentConfig,
     #[serde(default)]
+    pub audio: AudioConfig,
+    #[serde(default)]
     pub models: ModelsConfig,
     #[serde(default)]
     pub memory: MemoryConfig,
@@ -111,6 +113,35 @@ pub enum ThinkingLevel {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AudioConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    pub openai_api_key: Option<String>,
+    #[serde(default = "default_stt_model")]
+    pub stt_model: String,
+    #[serde(default = "default_tts_model")]
+    pub tts_model: String,
+    #[serde(default = "default_tts_voice")]
+    pub tts_voice: String,
+}
+
+fn default_stt_model() -> String { "whisper-1".to_string() }
+fn default_tts_model() -> String { "tts-1".to_string() }
+fn default_tts_voice() -> String { "alloy".to_string() }
+
+impl Default for AudioConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            openai_api_key: None,
+            stt_model: default_stt_model(),
+            tts_model: default_tts_model(),
+            tts_voice: default_tts_voice(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelsConfig {
     #[serde(default = "default_model")]
     pub default_model: String,
@@ -191,6 +222,7 @@ impl Default for AppConfig {
             gateway: GatewayConfig::default(),
             channels: ChannelsConfig::default(),
             agent: AgentConfig::default(),
+            audio: AudioConfig::default(),
             models: ModelsConfig::default(),
             memory: MemoryConfig::default(),
             workspace: WorkspaceConfig::default(),

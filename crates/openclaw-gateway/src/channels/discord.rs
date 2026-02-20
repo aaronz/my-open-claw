@@ -63,12 +63,13 @@ impl Channel for DiscordChannel {
 
     async fn start(&self) -> Result<()> {
         let token = self.token.clone();
+        let client = self.client.clone();
         let state_weak = self.state.clone();
         let channel_kind = self.kind();
 
         tokio::spawn(async move {
             loop {
-                if let Err(e) = connect_discord(&token, &state_weak, channel_kind.clone()).await {
+                if let Err(e) = connect_discord(&token, client.clone(), &state_weak, channel_kind.clone()).await {
                     tracing::error!("Discord Gateway error: {}", e);
                     tokio::time::sleep(Duration::from_secs(5)).await;
                 } else {
@@ -87,6 +88,7 @@ impl Channel for DiscordChannel {
 
 async fn connect_discord(
     token: &str,
+    client: reqwest::Client,
     state_weak: &Weak<AppState>,
     kind: ChannelKind,
 ) -> Result<()> {
@@ -127,7 +129,7 @@ async fn connect_discord(
         "op": 2,
         "d": {
             "token": token,
-            "intents": 33281, // GUILDS (1) | GUILD_MESSAGES (512) | MESSAGE_CONTENT (32768)
+            "intents": 33281, 
             "properties": {
                 "os": "linux",
                 "browser": "openclaw",
@@ -176,7 +178,7 @@ async fn connect_discord(
                                     continue;
                                 }
 
-                                let content = d["content"].as_str().unwrap_or("");
+                                let mut content = d["content"].as_str().unwrap_or("").to_string();
                                 let channel_id = d["channel_id"].as_str().unwrap_or("");
 
                                 let mut images = Vec::new();
@@ -186,6 +188,25 @@ async fn connect_discord(
                                             if ctype.starts_with("image/") {
                                                 if let Some(url) = att["url"].as_str() {
                                                     images.push(url.to_string());
+                                                }
+                                            } else if ctype.starts_with("audio/") || ctype == "application/ogg" {
+                                                // Handle voice message
+                                                if let Some(url) = att["url"].as_str() {
+                                                    if let Some(state) = state_weak.upgrade() {
+                                                        if let Some(voice) = &state.voice {
+                                                            if let Ok(resp) = client.get(url).send().await {
+                                                                if let Ok(bytes) = resp.bytes().await {
+                                                                    let filename = att["filename"].as_str().unwrap_or("voice.ogg");
+                                                                    if let Ok(text) = voice.transcribe(bytes.to_vec(), filename).await {
+                                                                        if !content.is_empty() {
+                                                                            content.push('\n');
+                                                                        }
+                                                                        content.push_str(&format!("[Voice Transcription]: {}", text));
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
@@ -201,7 +222,7 @@ async fn connect_discord(
                                     let user_msg = ChatMessage {
                                         id: Uuid::new_v4(),
                                         role: Role::User,
-                                        content: content.to_string(),
+                                        content,
                                         timestamp: chrono::Utc::now(),
                                         channel: kind.clone(),
                                         images,
