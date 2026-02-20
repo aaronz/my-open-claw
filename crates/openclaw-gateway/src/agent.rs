@@ -174,24 +174,47 @@ pub async fn run_agent_cycle(state: Arc<AppState>, session_id: Uuid) {
                           state.send_to_subscribers(&session_id, &json);
                       }
 
-                      if let Some(chan) = state.channels.get(&channel) {
-                          let peer_id = {
-                              if let Some(s) = state.sessions.get(&session_id) {
-                                  s.peer_id.clone()
-                              } else {
-                                  break;
-                              }
-                          };
-                          let chan_ref = chan.value().clone();
-                          drop(chan);
-                          let content = resp.content.clone();
+                    if let Some(chan) = state.channels.get(&channel) {
+                        let peer_id = {
+                            if let Some(s) = state.sessions.get(&session_id) {
+                                s.peer_id.clone()
+                            } else {
+                                break;
+                            }
+                        };
+                        
+                        let voice_reply = {
+                            if let Some(s) = state.sessions.get(&session_id) {
+                                s.metadata
+                                    .get("voice_reply")
+                                    .and_then(|v| v.as_bool())
+                                    .unwrap_or(false)
+                            } else {
+                                false
+                            }
+                        };
 
-                          tokio::spawn(async move {
-                              if let Err(e) = chan_ref.send_message(&peer_id, &content).await {
-                                  error!("Failed to send to channel: {}", e);
-                              }
-                          });
-                      }
+                        let chan_ref = chan.value().clone();
+                        drop(chan);
+                        let content = resp.content.clone();
+                        let voice_service = state.voice.clone();
+
+                        tokio::spawn(async move {
+                            if let Err(e) = chan_ref.send_message(&peer_id, &content).await {
+                                error!("Failed to send to channel: {}", e);
+                            }
+                            
+                            if voice_reply {
+                                if let Some(voice) = voice_service {
+                                    if let Ok(audio) = voice.speak(&content).await {
+                                        if let Err(e) = chan_ref.send_voice(&peer_id, audio).await {
+                                            error!("Failed to send voice: {}", e);
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                    }
                       break;
                  }
                  

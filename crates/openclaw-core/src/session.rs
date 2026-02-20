@@ -198,6 +198,18 @@ impl SessionStore {
         Ok(())
     }
 
+    pub fn update_metadata(&self, session_id: &Uuid, key: String, value: serde_json::Value) -> Result<()> {
+        let mut session = self
+            .sessions
+            .get_mut(session_id)
+            .ok_or_else(|| OpenClawError::Session(format!("session not found: {session_id}")))?;
+        session.metadata.insert(key, value);
+        session.updated_at = Utc::now();
+        drop(session);
+        self.persist(session_id);
+        Ok(())
+    }
+
     pub fn remove(&self, session_id: &Uuid) {
         if let Some((_, session)) = self.sessions.remove(session_id) {
             self.peer_index

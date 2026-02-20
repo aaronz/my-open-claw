@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use openclaw_core::session::{ChatMessage, Role};
 use openclaw_core::{Channel, ChannelKind, Result, WsMessage};
 use serde::Deserialize;
+use serde_json::json;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 use tokio::time::Duration;
@@ -153,22 +154,42 @@ impl Channel for TelegramChannel {
                                     
                                     if let Some(msg) = update.message {
                                         let mut content = msg.text.unwrap_or_default();
-                                        
+                                        let mut voice_reply_needed = false;
+
                                         // Handle Voice
-                                        if let Some(file_id) = msg.voice.map(|v| v.file_id).or(msg.audio.map(|a| a.file_id)) {
+                                        if let Some(file_id) =
+                                            msg.voice.map(|v| v.file_id).or(msg.audio.map(|a| a.file_id))
+                                        {
                                             if let Some(voice_service) = &state.voice {
-                                                let file_url = format!("https://api.telegram.org/bot{}/getFile?file_id={}", token, file_id);
+                                                let file_url = format!(
+                                                    "https://api.telegram.org/bot{}/getFile?file_id={}",
+                                                    token, file_id
+                                                );
                                                 if let Ok(file_resp) = client.get(&file_url).send().await {
-                                                    if let Ok(file_json) = file_resp.json::<FileResponse>().await {
-                                                        let download_url = format!("https://api.telegram.org/file/bot{}/{}", token, file_json.result.file_path);
-                                                        if let Ok(dl_resp) = client.get(&download_url).send().await {
+                                                    if let Ok(file_json) =
+                                                        file_resp.json::<FileResponse>().await
+                                                    {
+                                                        let download_url = format!(
+                                                            "https://api.telegram.org/file/bot{}/{}",
+                                                            token, file_json.result.file_path
+                                                        );
+                                                        if let Ok(dl_resp) =
+                                                            client.get(&download_url).send().await
+                                                        {
                                                             if let Ok(bytes) = dl_resp.bytes().await {
                                                                 // Telegram OGG or MP3
-                                                                if let Ok(text) = voice_service.transcribe(bytes.to_vec(), "voice.ogg").await {
+                                                                if let Ok(text) = voice_service
+                                                                    .transcribe(bytes.to_vec(), "voice.ogg")
+                                                                    .await
+                                                                {
                                                                     if !content.is_empty() {
                                                                         content.push('\n');
                                                                     }
-                                                                    content.push_str(&format!("[Voice Transcription]: {}", text));
+                                                                    content.push_str(&format!(
+                                                                        "[Voice Transcription]: {}",
+                                                                        text
+                                                                    ));
+                                                                    voice_reply_needed = true;
                                                                 }
                                                             }
                                                         }
@@ -182,10 +203,20 @@ impl Channel for TelegramChannel {
                                         }
 
                                         let peer_id = msg.chat.id.to_string();
-                                        
-                                        let session = state.sessions.get_or_create(channel_kind.clone(), &peer_id);
+
+                                        let session = state
+                                            .sessions
+                                            .get_or_create(channel_kind.clone(), &peer_id);
                                         let session_id = session.id;
-                                        drop(session); 
+                                        drop(session);
+
+                                        if voice_reply_needed {
+                                            let _ = state.sessions.update_metadata(
+                                                &session_id,
+                                                "voice_reply".to_string(),
+                                                json!(true),
+                                            );
+                                        }
 
                                         let user_msg = ChatMessage {
                                             id: Uuid::new_v4(),

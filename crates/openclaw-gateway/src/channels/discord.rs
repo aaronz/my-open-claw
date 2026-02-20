@@ -204,6 +204,7 @@ async fn connect_discord(
 
                                 let mut content = d["content"].as_str().unwrap_or("").to_string();
                                 let channel_id = d["channel_id"].as_str().unwrap_or("");
+                                let mut voice_reply_needed = false;
 
                                 let mut images = Vec::new();
                                 if let Some(attachments) = d["attachments"].as_array() {
@@ -213,19 +214,38 @@ async fn connect_discord(
                                                 if let Some(url) = att["url"].as_str() {
                                                     images.push(url.to_string());
                                                 }
-                                            } else if ctype.starts_with("audio/") || ctype == "application/ogg" {
+                                            } else if ctype.starts_with("audio/")
+                                                || ctype == "application/ogg"
+                                            {
                                                 // Handle voice message
                                                 if let Some(url) = att["url"].as_str() {
+                                                    // Only transcribe if voice service enabled
                                                     if let Some(state) = state_weak.upgrade() {
                                                         if let Some(voice) = &state.voice {
-                                                            if let Ok(resp) = client.get(url).send().await {
-                                                                if let Ok(bytes) = resp.bytes().await {
-                                                                    let filename = att["filename"].as_str().unwrap_or("voice.ogg");
-                                                                    if let Ok(text) = voice.transcribe(bytes.to_vec(), filename).await {
+                                                            if let Ok(resp) =
+                                                                client.get(url).send().await
+                                                            {
+                                                                if let Ok(bytes) =
+                                                                    resp.bytes().await
+                                                                {
+                                                                    let filename = att["filename"]
+                                                                        .as_str()
+                                                                        .unwrap_or("voice.ogg");
+                                                                    if let Ok(text) = voice
+                                                                        .transcribe(
+                                                                            bytes.to_vec(),
+                                                                            filename,
+                                                                        )
+                                                                        .await
+                                                                    {
                                                                         if !content.is_empty() {
                                                                             content.push('\n');
                                                                         }
-                                                                        content.push_str(&format!("[Voice Transcription]: {}", text));
+                                                                        content.push_str(&format!(
+                                                                            "[Voice Transcription]: {}",
+                                                                            text
+                                                                        ));
+                                                                        voice_reply_needed = true;
                                                                     }
                                                                 }
                                                             }
@@ -242,6 +262,14 @@ async fn connect_discord(
                                         state.sessions.get_or_create(kind.clone(), channel_id);
                                     let session_id = session.id;
                                     drop(session);
+
+                                    if voice_reply_needed {
+                                        let _ = state.sessions.update_metadata(
+                                            &session_id,
+                                            "voice_reply".to_string(),
+                                            json!(true),
+                                        );
+                                    }
 
                                     let user_msg = ChatMessage {
                                         id: Uuid::new_v4(),
