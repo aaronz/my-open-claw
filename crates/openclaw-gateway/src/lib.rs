@@ -9,6 +9,7 @@ pub mod tools;
 pub mod ws;
 
 use crate::channels::discord::DiscordChannel;
+use crate::channels::slack::SlackChannel;
 use crate::channels::telegram::TelegramChannel;
 use axum::middleware;
 use axum::routing::get;
@@ -74,6 +75,29 @@ pub async fn start_gateway(config: AppConfig) -> openclaw_core::Result<()> {
                     }
                     Err(e) => {
                         tracing::error!("Failed to start Discord channel: {}", e);
+                    }
+                }
+            }
+        }
+    }
+
+    if let Some(slack_config) = &state.config.channels.slack {
+        if slack_config.enabled {
+            if let (Some(token), Some(app_token)) =
+                (&slack_config.token, &slack_config.app_token)
+            {
+                let channel = SlackChannel::new(
+                    token.clone(),
+                    app_token.clone(),
+                    Arc::downgrade(&state),
+                );
+                match channel.start().await {
+                    Ok(_) => {
+                        info!("Slack channel started");
+                        state.channels.insert(ChannelKind::Slack, Arc::new(channel));
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to start Slack channel: {}", e);
                     }
                 }
             }

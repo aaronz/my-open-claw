@@ -58,50 +58,82 @@ pub async fn run_agent_cycle(state: Arc<AppState>, session_id: Uuid) {
     }
     
     let provider = state.provider.as_ref().unwrap();
-    let model = state.config.models.default_model.clone();
-    let max_tokens = state.config.agent.max_tokens;
-    
+    let (model, max_tokens, temp_override) = {
+        let default_model = state.config.models.default_model.clone();
+        let default_max_tokens = state.config.agent.max_tokens;
+
+        if let Some(session) = state.sessions.get(&session_id) {
+            let m = session
+                .metadata
+                .get("model")
+                .and_then(|v| v.as_str())
+                .map(String::from)
+                .unwrap_or(default_model);
+            let t = session
+                .metadata
+                .get("temperature")
+                .and_then(|v| v.as_f64())
+                .map(|f| f as f32);
+            let mt = session
+                .metadata
+                .get("max_tokens")
+                .and_then(|v| v.as_u64())
+                .map(|u| u as u32)
+                .or(default_max_tokens);
+            (m, mt, t)
+        } else {
+            (default_model, default_max_tokens, None)
+        }
+    };
+
     // 3. Loop turns
     for _turn in 0..5 {
         let (messages, system_prompt, channel) = {
-             let session = match state.sessions.get(&session_id) {
-                 Some(s) => s,
-                 None => return, // Session disappeared
-             };
-             (
-                 session.messages.clone(), 
-                 state.effective_system_prompt(),
-                 session.channel.clone()
-             )
+            let session = match state.sessions.get(&session_id) {
+                Some(s) => s,
+                None => return, // Session disappeared
+            };
+            (
+                session.messages.clone(),
+                state.effective_system_prompt(),
+                session.channel.clone(),
+            )
         };
-        
+
         let (token_tx, mut token_rx) = mpsc::channel::<String>(256);
         let stream_state = Arc::clone(&state);
         let stream_sid = session_id;
-        
+
         let stream_task = tokio::spawn(async move {
             while let Some(token) = token_rx.recv().await {
-                 if let Ok(json) = serde_json::to_string(&WsMessage::AgentResponse {
-                     session_id: stream_sid,
-                     content: token,
-                     done: false,
-                 }) {
-                     stream_state.send_to_subscribers(&stream_sid, &json);
-                 }
+                if let Ok(json) = serde_json::to_string(&WsMessage::AgentResponse {
+                    session_id: stream_sid,
+                    content: token,
+                    done: false,
+                }) {
+                    stream_state.send_to_subscribers(&stream_sid, &json);
+                }
             }
         });
-        
+
         let tools: Vec<_> = state.tools.values().map(|t| t.definition()).collect();
-        let tools_slice = if tools.is_empty() { None } else { Some(tools.as_slice()) };
-        
-        let result = provider.stream_chat(
-             &messages,
-             system_prompt.as_deref(),
-             &model,
-             max_tokens,
-             tools_slice,
-             token_tx
-        ).await;
+        let tools_slice = if tools.is_empty() {
+            None
+        } else {
+            Some(tools.as_slice())
+        };
+
+        let result = provider
+            .stream_chat(
+                &messages,
+                system_prompt.as_deref(),
+                &model,
+                max_tokens,
+                temp_override,
+                tools_slice,
+                token_tx,
+            )
+            .await;
         
         let _ = stream_task.await;
         
@@ -241,7 +273,7 @@ pub async fn compact_session(state: Arc<AppState>, session_id: Uuid) -> Result<S
         let model = &state.config.models.default_model;
 
         match provider
-            .stream_chat(&msgs, None, model, None, None, tx)
+            .stream_chat(&msgs, None, model, None, None, None, tx)
             .await
         {
             Ok(resp) => {

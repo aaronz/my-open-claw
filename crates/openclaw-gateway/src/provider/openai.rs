@@ -36,6 +36,7 @@ impl Provider for OpenAiProvider {
         system_prompt: Option<&str>,
         model: &str,
         max_tokens: Option<u32>,
+        temperature: Option<f32>,
         tools: Option<&[openclaw_core::provider::ToolDefinition]>,
         token_tx: mpsc::Sender<String>,
     ) -> Result<openclaw_core::provider::CompletionResponse> {
@@ -100,6 +101,10 @@ impl Provider for OpenAiProvider {
 
         if let Some(mt) = max_tokens {
             body["max_tokens"] = json!(mt);
+        }
+
+        if let Some(t) = temperature {
+            body["temperature"] = json!(t);
         }
 
         if let Some(tools) = tools {

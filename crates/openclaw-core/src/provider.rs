@@ -45,6 +45,7 @@ pub trait Provider: Send + Sync {
         system_prompt: Option<&str>,
         model: &str,
         max_tokens: Option<u32>,
+        temperature: Option<f32>,
         tools: Option<&[ToolDefinition]>,
         token_tx: mpsc::Sender<String>,
     ) -> Result<CompletionResponse>;

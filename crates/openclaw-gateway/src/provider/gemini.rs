@@ -35,6 +35,7 @@ impl Provider for GeminiProvider {
         system_prompt: Option<&str>,
         _model: &str,
         max_tokens: Option<u32>,
+        temperature: Option<f32>,
         tools: Option<&[ToolDefinition]>,
         token_tx: mpsc::Sender<String>,
     ) -> Result<CompletionResponse> {
@@ -94,6 +95,10 @@ impl Provider for GeminiProvider {
                 "maxOutputTokens": max_tokens.unwrap_or(8192)
             }
         });
+
+        if let Some(t) = temperature {
+            body["generationConfig"]["temperature"] = json!(t);
+        }
 
         if let Some(sp) = system_prompt {
             body["systemInstruction"] = json!({

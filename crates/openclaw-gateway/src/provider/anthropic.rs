@@ -32,6 +32,7 @@ impl Provider for AnthropicProvider {
         system_prompt: Option<&str>,
         model: &str,
         max_tokens: Option<u32>,
+        temperature: Option<f32>,
         tools: Option<&[openclaw_core::provider::ToolDefinition]>,
         token_tx: mpsc::Sender<String>,
     ) -> Result<openclaw_core::provider::CompletionResponse> {
@@ -98,6 +99,10 @@ impl Provider for AnthropicProvider {
             "stream": true,
             "max_tokens": max_tokens.unwrap_or(4096),
         });
+
+        if let Some(t) = temperature {
+            body["temperature"] = json!(t);
+        }
 
         if let Some(sp) = system_prompt {
             body["system"] = json!(sp);

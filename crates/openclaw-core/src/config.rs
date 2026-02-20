@@ -73,6 +73,7 @@ pub struct ChannelInstanceConfig {
     #[serde(default)]
     pub enabled: bool,
     pub token: Option<String>,
+    pub app_token: Option<String>,
     #[serde(default)]
     pub dm_policy: DmPolicy,
     #[serde(default)]

@@ -1,0 +1,11 @@
+version: '3.8'
+services:
+  openclaw:
+    build: .
+    image: openclaw:latest
+    container_name: openclaw
+    volumes:
+      - ./config:/root/.config/openclaw
+      - ./data:/root/.local/share/openclaw
+    network_mode: host
+    restart: unless-stopped
