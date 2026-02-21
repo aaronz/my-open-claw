@@ -31,6 +31,7 @@ enum Commands {
     Agent(commands::agent::AgentArgs),
     Dev(commands::gateway::GatewayArgs),
     Listen,
+    Plugins(commands::plugins::PluginsArgs),
     #[command(subcommand)]
     Message(commands::message::MessageCommands),
 }
@@ -75,6 +76,7 @@ async fn main() -> Result<()> {
             };
             commands::agent::run(args, config).await
         }
+        Commands::Plugins(args) => commands::plugins::run(args, config).await,
         Commands::Message(sub) => match sub {
             commands::message::MessageCommands::Send(args) => {
                 commands::message::run_send(args, config).await

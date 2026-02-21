@@ -41,13 +41,20 @@ impl AppState {
         let workspace_prompt =
             openclaw_core::workspace::load_prompt_files(&config.workspace.path);
 
-        let sessions_dir = std::path::PathBuf::from(&config.workspace.path)
+        let data_dir = std::path::PathBuf::from(&config.workspace.path)
             .parent()
             .unwrap_or(std::path::Path::new("."))
-            .join("sessions");
-
-        let sessions = SessionStore::with_persistence(sessions_dir)
-            .unwrap_or_else(|_| SessionStore::new());
+            .join("data");
+        std::fs::create_dir_all(&data_dir).unwrap_or_default();
+        
+        let db_path = data_dir.join("openclaw.db");
+        let db_url = format!("sqlite://{}", db_path.display());
+        
+        let sessions = SessionStore::with_sqlite(&db_url).await
+            .unwrap_or_else(|e| {
+                tracing::error!("Failed to init SQLite: {}. Using in-memory sessions.", e);
+                SessionStore::new()
+            });
 
         let cron = Arc::new(CronScheduler::new());
 
@@ -66,7 +73,12 @@ impl AppState {
         let voice = VoiceService::new(&config);
 
         let memory_ref = memory.clone();
-        let mut skills = default_skills(config.agent.github_token.clone(), config.agent.obsidian_path.clone(), config.agent.notion_token.clone());
+        let mut skills = default_skills(
+            config.agent.github_token.clone(), 
+            config.agent.obsidian_path.clone(), 
+            config.agent.notion_token.clone(),
+            config.agent.google_token.clone()
+        );
         if let Some(ref mem) = memory_ref {
             skills.register(Box::new(crate::skills::MemorySkill::new(Some(Arc::new(mem.clone())))));
         }
@@ -111,7 +123,12 @@ impl AppState {
         let provider = create_provider_with_fallback(&config.models.providers);
 
         let cron = Arc::new(CronScheduler::new());
-        let skills = default_skills(config.agent.github_token.clone(), config.agent.obsidian_path.clone(), config.agent.notion_token.clone());
+        let skills = default_skills(
+            config.agent.github_token.clone(), 
+            config.agent.obsidian_path.clone(), 
+            config.agent.notion_token.clone(),
+            config.agent.google_token.clone()
+        );
 
         let state = Arc::new(Self {
             config: config.clone(),

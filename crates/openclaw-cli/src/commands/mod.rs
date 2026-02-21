@@ -4,3 +4,4 @@ pub mod gateway;
 pub mod ingest;
 pub mod message;
 pub mod onboard;
+pub mod plugins;

@@ -66,6 +66,7 @@ pub enum WsMessage {
         content: String,
         language: Option<String>,
         title: Option<String>,
+        action: Option<String>,
     },
 }
 

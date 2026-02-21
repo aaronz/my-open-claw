@@ -39,6 +39,11 @@ impl Tool for CanvasTool {
                     "language": {
                         "type": "string",
                         "description": "Programming language for syntax highlighting"
+                    },
+                    "action": {
+                        "type": "string",
+                        "enum": ["create", "update", "patch", "delete"],
+                        "description": "Type of operation"
                     }
                 },
                 "required": ["id", "content"]
@@ -51,6 +56,7 @@ impl Tool for CanvasTool {
         let content = args["content"].as_str().ok_or_else(|| openclaw_core::OpenClawError::Provider("Missing content".to_string()))?.to_string();
         let title = args["title"].as_str().map(|s| s.to_string());
         let language = args["language"].as_str().map(|s| s.to_string());
+        let action = args["action"].as_str().map(|s| s.to_string());
         
         let session_id_str = args["_session_id"].as_str().ok_or_else(|| openclaw_core::OpenClawError::Provider("Missing session_id".to_string()))?;
         let session_id = Uuid::parse_str(session_id_str).map_err(|e| openclaw_core::OpenClawError::Provider(e.to_string()))?;
@@ -61,6 +67,7 @@ impl Tool for CanvasTool {
             content,
             language,
             title,
+            action,
         };
 
         if let Ok(json) = serde_json::to_string(&msg) {

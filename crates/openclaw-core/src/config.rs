@@ -104,6 +104,7 @@ pub struct AgentConfig {
     pub github_token: Option<String>,
     pub obsidian_path: Option<String>,
     pub notion_token: Option<String>,
+    pub google_token: Option<String>,
     #[serde(default)]
     pub mcp_servers: Vec<McpServerConfig>,
 }
@@ -274,6 +275,7 @@ impl Default for AgentConfig {
             github_token: None,
             obsidian_path: None,
             notion_token: None,
+            google_token: None,
             mcp_servers: vec![],
         }
     }

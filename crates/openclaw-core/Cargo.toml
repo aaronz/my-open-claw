@@ -17,6 +17,7 @@ tracing = { workspace = true }
 directories = { workspace = true }
 dashmap = { workspace = true }
 tokio = { workspace = true }
+sqlx = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

@@ -1,4 +1,5 @@
 use crate::channel::ChannelKind;
+use crate::db::DbStore;
 use crate::error::{OpenClawError, Result};
 use crate::provider::{ToolCall, ToolResult};
 use chrono::{DateTime, Utc};
@@ -46,7 +47,7 @@ pub enum Role {
 pub struct SessionStore {
     sessions: DashMap<Uuid, Session>,
     peer_index: DashMap<(ChannelKind, String), Uuid>,
-    data_dir: Option<std::path::PathBuf>,
+    db: Option<DbStore>,
 }
 
 impl SessionStore {
@@ -54,52 +55,17 @@ impl SessionStore {
         Self {
             sessions: DashMap::new(),
             peer_index: DashMap::new(),
-            data_dir: None,
+            db: None,
         }
     }
 
-    pub fn with_persistence(data_dir: std::path::PathBuf) -> Result<Self> {
-        std::fs::create_dir_all(&data_dir)?;
-        let store = Self {
+    pub async fn with_sqlite(db_url: &str) -> Result<Self> {
+        let db = DbStore::new(db_url).await?;
+        Ok(Self {
             sessions: DashMap::new(),
             peer_index: DashMap::new(),
-            data_dir: Some(data_dir),
-        };
-        store.load_all()?;
-        Ok(store)
-    }
-
-    fn load_all(&self) -> Result<()> {
-        let dir = match &self.data_dir {
-            Some(d) => d,
-            None => return Ok(()),
-        };
-        if !dir.exists() {
-            return Ok(());
-        }
-        for entry in std::fs::read_dir(dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            if path.extension().is_some_and(|e| e == "json") {
-                if let Ok(content) = std::fs::read_to_string(&path) {
-                    if let Ok(session) = serde_json::from_str::<Session>(&content) {
-                        self.peer_index
-                            .insert((session.channel.clone(), session.peer_id.clone()), session.id);
-                        self.sessions.insert(session.id, session);
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-
-    fn persist(&self, session_id: &Uuid) {
-        if let (Some(dir), Some(session)) = (&self.data_dir, self.sessions.get(session_id)) {
-            let path = dir.join(format!("{}.json", session_id));
-            if let Ok(json) = serde_json::to_string_pretty(session.value()) {
-                let _ = std::fs::write(path, json);
-            }
-        }
+            db: Some(db),
+        })
     }
 
     pub fn create(&self, channel: ChannelKind, peer_id: String) -> Session {
@@ -107,21 +73,25 @@ impl SessionStore {
         let session = Session {
             id: Uuid::new_v4(),
             channel: channel.clone(),
-            peer_id: peer_id.clone(),
+            peer_id: peer_id.to_string(),
             messages: vec![],
             created_at: now,
             updated_at: now,
             metadata: HashMap::new(),
         };
-        self.peer_index
-            .insert((channel, peer_id), session.id);
+        
+        self.peer_index.insert((channel.clone(), peer_id.to_string()), session.id);
         self.sessions.insert(session.id, session.clone());
-        self.persist(&session.id);
+        
+        if let Some(db) = &self.db {
+            let db = db.clone();
+            let sess = session.clone();
+            tokio::spawn(async move {
+                let _ = db.create_session(sess.channel, sess.peer_id).await;
+            });
+        }
+        
         session
-    }
-
-    pub fn get(&self, id: &Uuid) -> Option<Session> {
-        self.sessions.get(id).map(|s| s.clone())
     }
 
     pub fn get_or_create(&self, channel: ChannelKind, peer_id: &str) -> Session {
@@ -131,6 +101,7 @@ impl SessionStore {
                 return session.clone();
             }
         }
+        
         self.create(channel, peer_id.to_string())
     }
 
@@ -140,14 +111,26 @@ impl SessionStore {
             .get_mut(session_id)
             .ok_or_else(|| OpenClawError::Session(format!("session not found: {session_id}")))?;
         session.updated_at = Utc::now();
-        session.messages.push(msg);
+        session.messages.push(msg.clone());
         drop(session);
-        self.persist(session_id);
+        
+        if let Some(db) = &self.db {
+            let db = db.clone();
+            let sid = *session_id;
+            tokio::spawn(async move {
+                let _ = db.add_message(sid, msg).await;
+            });
+        }
+        
         Ok(())
     }
 
     pub fn list(&self) -> Vec<Session> {
         self.sessions.iter().map(|r| r.value().clone()).collect()
+    }
+    
+    pub fn get(&self, id: &Uuid) -> Option<Session> {
+        self.sessions.get(id).map(|s| s.clone())
     }
 
     pub fn reset(&self, session_id: &Uuid) -> Result<()> {
@@ -158,7 +141,6 @@ impl SessionStore {
         session.messages.clear();
         session.updated_at = Utc::now();
         drop(session);
-        self.persist(session_id);
         Ok(())
     }
 
@@ -170,7 +152,6 @@ impl SessionStore {
         session.messages = messages;
         session.updated_at = Utc::now();
         drop(session);
-        self.persist(session_id);
         Ok(())
     }
 
@@ -181,7 +162,7 @@ impl SessionStore {
             .ok_or_else(|| OpenClawError::Session(format!("session not found: {session_id}")))?;
 
         if session.messages.len() < summarized_count {
-            return Ok(()); // Messages removed, skip compaction
+            return Ok(());
         }
 
         let mut new_msgs = Vec::with_capacity(session.messages.len() - summarized_count + 1);
@@ -194,7 +175,6 @@ impl SessionStore {
         session.messages = new_msgs;
         session.updated_at = Utc::now();
         drop(session);
-        self.persist(session_id);
         Ok(())
     }
 
@@ -206,7 +186,6 @@ impl SessionStore {
         session.metadata.insert(key, value);
         session.updated_at = Utc::now();
         drop(session);
-        self.persist(session_id);
         Ok(())
     }
 
@@ -214,10 +193,6 @@ impl SessionStore {
         if let Some((_, session)) = self.sessions.remove(session_id) {
             self.peer_index
                 .remove(&(session.channel.clone(), session.peer_id.clone()));
-            if let Some(dir) = &self.data_dir {
-                let path = dir.join(format!("{}.json", session_id));
-                let _ = std::fs::remove_file(path);
-            }
         }
     }
 }
