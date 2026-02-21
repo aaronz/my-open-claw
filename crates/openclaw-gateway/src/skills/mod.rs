@@ -105,6 +105,7 @@ pub mod linear;
 pub mod google_sheets;
 pub mod system;
 pub mod todoist;
+pub mod clawhub;
 
 pub use github::GitHubSkill;
 pub use slack::SlackSkill;
@@ -124,6 +125,7 @@ pub use linear::LinearSkill;
 pub use google_sheets::GoogleSheetsSkill;
 pub use system::SystemSkill;
 pub use todoist::TodoistSkill;
+pub use clawhub::ClawHubSkill;
 
 pub fn default_skills(github_token: Option<String>, obsidian_path: Option<String>, notion_token: Option<String>, google_token: Option<String>, linear_token: Option<String>, todoist_token: Option<String>) -> SkillRegistry {
     let mut registry = SkillRegistry::new();
@@ -146,6 +148,7 @@ pub fn default_skills(github_token: Option<String>, obsidian_path: Option<String
     registry.register(Box::new(NodeSkill));
     registry.register(Box::new(DockerSkill));
     registry.register(Box::new(MemorySkill::new(None)));
+    registry.register(Box::new(ClawHubSkill::new()));
     
     registry
 }

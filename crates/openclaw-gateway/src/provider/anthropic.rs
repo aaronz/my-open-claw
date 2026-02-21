@@ -154,7 +154,7 @@ impl Provider for AnthropicProvider {
         let mut buffer = String::new();
 
         while let Some(chunk) = stream.next().await {
-            let chunk = chunk.map_err(|e| OpenClawError::Provider(e.to_string()))?;
+            let chunk = chunk.map_err(|e: reqwest::Error| OpenClawError::Provider(e.to_string()))?;
             buffer.push_str(&String::from_utf8_lossy(&chunk));
 
             while let Some(pos) = buffer.find("\n\n") {

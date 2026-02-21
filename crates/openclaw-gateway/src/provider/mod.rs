@@ -1,25 +1,74 @@
 pub mod anthropic;
 pub mod gemini;
 pub mod openai;
+pub mod ollama;
+pub mod vllm;
+pub mod litellm;
+pub mod bedrock;
+pub mod huggingface;
+pub mod together;
+pub mod moonshot;
 
 use openclaw_core::config::ProviderConfig;
 use openclaw_core::provider::Provider;
 use std::sync::Arc;
+use tokio::sync::mpsc;
 
 pub fn create_provider(config: &ProviderConfig) -> Option<Arc<dyn Provider>> {
-    let api_key = config.api_key.as_ref()?;
+    let api_key = config.api_key.as_ref();
     match config.name.to_lowercase().as_str() {
-        "anthropic" | "claude" => Some(Arc::new(anthropic::AnthropicProvider::new(
-            api_key.clone(),
-        ))),
-        "openai" | "gpt" => Some(Arc::new(openai::OpenAiProvider::new(
-            api_key.clone(),
+        "anthropic" | "claude" => {
+            let key = api_key?;
+            Some(Arc::new(anthropic::AnthropicProvider::new(key.clone())))
+        }
+        "openai" | "gpt" => {
+            let key = api_key?;
+            Some(Arc::new(openai::OpenAiProvider::new(
+                key.clone(),
+                config.base_url.clone(),
+            )))
+        }
+        "gemini" | "google" => {
+            let key = api_key?;
+            Some(Arc::new(gemini::GeminiProvider::new(
+                key.clone(),
+                config.model.clone(),
+            )))
+        }
+        "ollama" => Some(Arc::new(ollama::OllamaProvider::new(
             config.base_url.clone(),
-        ))),
-        "gemini" | "google" => Some(Arc::new(gemini::GeminiProvider::new(
-            api_key.clone(),
             config.model.clone(),
         ))),
+        "vllm" => {
+            let base = config.base_url.clone().unwrap_or_else(|| "http://localhost:8000".to_string());
+            Some(Arc::new(vllm::VllmProvider::new(base, config.model.clone())))
+        }
+        "litellm" => {
+            let key = api_key?;
+            let base = config.base_url.clone().unwrap_or_else(|| "http://localhost:4000".to_string());
+            Some(Arc::new(litellm::LitellmProvider::new(base, key.clone(), config.model.clone())))
+        }
+        "bedrock" => {
+            let key = api_key?;
+            let secret = config.base_url.clone().unwrap_or_default();
+            let region = "us-east-1".to_string();
+            Some(Arc::new(bedrock::BedrockProvider::new(region, config.model.clone(), key.clone(), secret)))
+        }
+        "huggingface" | "hf" => {
+            let key = api_key?;
+            let model = if config.model.is_empty() { "microsoft/DialoGPT-large".to_string() } else { config.model.clone() };
+            Some(Arc::new(huggingface::HuggingFaceProvider::new(key.clone(), model)))
+        }
+        "together" | "togetherai" => {
+            let key = api_key?;
+            let model = if config.model.is_empty() { "meta-llama/Llama-3-70b-chat-hf".to_string() } else { config.model.clone() };
+            Some(Arc::new(together::TogetherProvider::new(key.clone(), model)))
+        }
+        "moonshot" | "kimi" => {
+            let key = api_key?;
+            let model = if config.model.is_empty() { "moonshot-v1-8k".to_string() } else { config.model.clone() };
+            Some(Arc::new(moonshot::MoonshotProvider::new(key.clone(), model)))
+        }
         "mock" | "test" => Some(Arc::new(MockProvider)),
         _ => {
             tracing::warn!("unknown provider: {}", config.name);
@@ -103,58 +152,6 @@ impl Provider for FailoverProvider {
         temperature: Option<f32>,
         tools: Option<&[openclaw_core::provider::ToolDefinition]>,
         token_tx: mpsc::Sender<String>,
-    ) -> openclaw_core::error::Result<openclaw_core::provider::CompletionResponse> {
-        let mut last_err = None;
-        let mut current_index = 0;
-
-        loop {
-            let provider = self.get_next_provider(current_index);
-
-            match provider
-                .stream_chat(
-                    messages,
-                    system_prompt,
-                    model,
-                    max_tokens,
-                    temperature,
-                    tools,
-                    token_tx.clone(),
-                )
-                .await
-            {
-                Ok(response) => return Ok(response),
-                Err(e) => {
-                    tracing::warn!(
-                        "Provider {} failed: {}. Trying next provider...",
-                        provider.name(),
-                        e
-                    );
-                    last_err = Some(e);
-                    current_index = (current_index + 1) % self.providers.len();
-
-                    if current_index == 0 {
-                        break;
-                    }
-                }
-            }
-        }
-
-        Err(last_err.unwrap_or_else(|| {
-            openclaw_core::OpenClawError::Provider("All providers failed".to_string())
-        }))
-    }
-}
-
-
-    async fn stream_chat(
-        &self,
-        messages: &[openclaw_core::session::ChatMessage],
-        system_prompt: Option<&str>,
-        model: &str,
-        max_tokens: Option<u32>,
-        temperature: Option<f32>,
-        tools: Option<&[openclaw_core::provider::ToolDefinition]>,
-        token_tx: tokio::sync::mpsc::Sender<String>,
     ) -> openclaw_core::error::Result<openclaw_core::provider::CompletionResponse> {
         let mut last_err = None;
         let mut current_index = 0;

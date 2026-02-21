@@ -1,16 +1,19 @@
 pub mod agent;
+pub mod agent_router;
 pub mod auth;
 pub mod channels;
 pub mod cron;
 pub mod mcp;
 pub mod memory;
 pub mod network;
+pub mod nodes;
 pub mod provider;
 pub mod routes;
 pub mod skills;
 pub mod state;
 pub mod tools;
 pub mod voice;
+pub mod webhooks;
 pub mod ws;
 
 use crate::channels::discord::DiscordChannel;
@@ -36,12 +39,13 @@ use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::trace as sdktrace;
 use opentelemetry_sdk::Resource;
 use opentelemetry::KeyValue;
+use tracing_subscriber::prelude::*;
 
 pub fn init_telemetry(config: &AppConfig) {
-    if config.diagnostics.otel.enabled {
+    if config.agent.diagnostics.otel.enabled {
         let exporter = opentelemetry_otlp::new_exporter()
             .http()
-            .with_endpoint(&config.diagnostics.otel.endpoint);
+            .with_endpoint(&config.agent.diagnostics.otel.endpoint);
         
         let tracer = opentelemetry_otlp::new_pipeline()
             .tracing()

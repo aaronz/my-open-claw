@@ -16,6 +16,10 @@ pub enum ChannelKind {
     Cli,
     Api,
     Matrix,
+    #[serde(rename = "zalo")]
+    Zalo,
+    #[serde(rename = "google_chat")]
+    GoogleChat,
 }
 
 impl std::fmt::Display for ChannelKind {
@@ -30,6 +34,8 @@ impl std::fmt::Display for ChannelKind {
             Self::Cli => write!(f, "cli"),
             Self::Api => write!(f, "api"),
             Self::Matrix => write!(f, "matrix"),
+            Self::Zalo => write!(f, "zalo"),
+            Self::GoogleChat => write!(f, "google_chat"),
         }
     }
 }

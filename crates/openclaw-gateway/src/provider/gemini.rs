@@ -158,7 +158,7 @@ impl Provider for GeminiProvider {
         let mut buffer = String::new();
 
         while let Some(chunk) = stream.next().await {
-            let chunk = chunk.map_err(|e| OpenClawError::Provider(e.to_string()))?;
+            let chunk = chunk.map_err(|e: reqwest::Error| OpenClawError::Provider(e.to_string()))?;
             let s = String::from_utf8_lossy(&chunk);
             buffer.push_str(&s);
 

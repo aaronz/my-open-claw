@@ -24,19 +24,21 @@ impl FeishuChannel {
         }
     }
 
-    async fn get_tenant_token(&self) -> Result<String, String> {
+    async fn get_tenant_token(&self) -> Result<String> {
         let url = "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal";
         let body = json!({
             "app_id": self.app_id,
             "app_secret": self.app_secret
         });
 
-        let res = self.client.post(url).json(&body).send().await.map_err(|e| e.to_string())?;
-        let json: serde_json::Value = res.json().await.map_err(|e| e.to_string())?;
+        let res = self.client.post(url).json(&body).send().await
+            .map_err(|e| openclaw_core::OpenClawError::Provider(e.to_string()))?;
+        let json: serde_json::Value = res.json().await
+            .map_err(|e| openclaw_core::OpenClawError::Provider(e.to_string()))?;
         
         json["tenant_access_token"].as_str()
             .map(|s| s.to_string())
-            .ok_or_else(|| "Failed to get tenant token".to_string())
+            .ok_or_else(|| openclaw_core::OpenClawError::Provider("Failed to get tenant token".to_string()))
     }
 }
 
@@ -51,7 +53,7 @@ impl Channel for FeishuChannel {
     }
 
     async fn send_message(&self, peer_id: &str, content: &str) -> Result<()> {
-        let token = self.get_tenant_token().await.map_err(|e| openclaw_core::OpenClawError::Provider(e))?;
+        let token = self.get_tenant_token().await?;
         let url = "https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=open_id";
         
         let body = json!({

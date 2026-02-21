@@ -3,10 +3,24 @@ use chrono::Utc;
 use openclaw_core::session::{ChatMessage, Role};
 use openclaw_core::{ChannelKind, WsMessage, Tool};
 use serde_json::json;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::error;
 use uuid::Uuid;
+
+const MAX_TOOL_CALL_REPETITIONS: usize = 3;
+
+fn hash_tool_call(name: &str, args: &serde_json::Value) -> String {
+    let mut sorted_args = if let Some(obj) = args.as_object() {
+        let mut pairs: Vec<_> = obj.iter().collect();
+        pairs.sort_by_key(|(k, _)| *k);
+        pairs.into_iter().map(|(k, v)| format!("{}:{}", k, v)).collect::<Vec<_>>().join(",")
+    } else {
+        args.to_string()
+    };
+    format!("{}:{}", name, sorted_args)
+}
 
 pub async fn run_agent_cycle(state: Arc<AppState>, session_id: Uuid) {
     if let Ok(json) = serde_json::to_string(&WsMessage::AgentThinking {
@@ -73,6 +87,7 @@ pub async fn run_agent_cycle(state: Arc<AppState>, session_id: Uuid) {
     };
 
     // Loop
+    let mut tool_call_history: HashMap<String, usize> = HashMap::new();
     for _turn in 0..5 {
         let (messages, mut system_prompt, channel) = {
             let session = match state.sessions.get(&session_id) {
@@ -247,7 +262,32 @@ pub async fn run_agent_cycle(state: Arc<AppState>, session_id: Uuid) {
                      state.send_to_subscribers(&session_id, &json);
                  }
                  
-                for tc in resp.tool_calls {
+for tc in resp.tool_calls {
+                    let call_hash = hash_tool_call(&tc.name, &tc.arguments);
+                    let repeat_count = tool_call_history.entry(call_hash.clone()).or_insert(0);
+                    *repeat_count += 1;
+                    
+                    if *repeat_count > MAX_TOOL_CALL_REPETITIONS {
+                        let err_msg = format!("Loop detected: tool '{}' called {} times with same arguments. Breaking cycle.", tc.name, repeat_count);
+                        error!("{}", err_msg);
+                        
+                        let tool_msg = ChatMessage {
+                            id: Uuid::new_v4(),
+                            role: Role::Tool,
+                            content: String::new(),
+                            timestamp: Utc::now(),
+                            channel: channel.clone(),
+                            tool_calls: vec![],
+                            images: vec![],
+                            tool_result: Some(openclaw_core::provider::ToolResult {
+                                tool_call_id: tc.id,
+                                content: format!("Error: {}", err_msg),
+                            }),
+                        };
+                        let _ = state.sessions.add_message(&session_id, tool_msg);
+                        continue;
+                    }
+                    
                     let output = if let Some(tool) = state.tools.get(&tc.name) {
                         let mut args = tc.arguments.clone();
                         if let Some(obj) = args.as_object_mut() {

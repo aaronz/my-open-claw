@@ -127,25 +127,6 @@ pub struct DiagnosticsConfig {
     pub otel: OtelConfig,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OtelConfig {
-    #[serde(default)]
-    pub enabled: bool,
-    #[serde(default = "default_otel_endpoint")]
-    pub endpoint: String,
-}
-
-fn default_otel_endpoint() -> String {
-    "http://localhost:4318".to_string()
-}
-
-pub struct DiagnosticsConfig {
-    #[serde(default)]
-    pub enabled: bool,
-    #[serde(default)]
-    pub otel: OtelConfig,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct OtelConfig {
     #[serde(default)]
@@ -156,6 +137,19 @@ pub struct OtelConfig {
 
 fn default_otel_endpoint() -> String {
     "http://localhost:4318".to_string()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct NetworkConfig {
+    #[serde(default)]
+    pub tailscale: TailscaleConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TailscaleConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    pub hostname: Option<String>,
 }
 
 

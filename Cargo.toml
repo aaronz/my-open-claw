@@ -14,11 +14,59 @@ license = "MIT"
 repository = "https://github.com/openclaw/openclaw"
 
 [workspace.dependencies]
-# ... (existing dependencies)
+# Core dependencies
+async-trait = "0.1"
 thiserror = "1.0"
-# ... (other dependencies)
-opentelemetry = { version = "0.23", features = ["rt-tokio"] }
-opentelemetry-otlp = { version = "0.16", features = ["http-proto"] }
+anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Async runtime
+tokio = { version = "1.0", features = ["full"] }
+futures = "0.3"
+
+# Web / HTTP
+axum = { version = "0.7", features = ["ws", "macros"] }
+tower = { version = "0.4", features = ["util"] }
+tower-http = { version = "0.5", features = ["cors", "fs", "trace"] }
+reqwest = { version = "0.11", features = ["json", "rustls-tls", "multipart", "stream"] }
+tokio-tungstenite = { version = "0.21", features = ["rustls-tls-webpki-roots"] }
+
+# CLI
+clap = { version = "4.0", features = ["derive", "env"] }
+colored = "2.0"
+dialoguer = "0.11"
+
+# Data structures
+dashmap = "5.5"
+directories = "5.0"
+
+# Database
+sqlx = { version = "0.7", features = ["runtime-tokio", "sqlite", "chrono"] }
+
+# Browser automation
+chromiumoxide = { version = "0.5", features = ["tokio-runtime"] }
+
+# Image processing
+image = "0.24"
+base64 = "0.21"
+
+# Observability
+opentelemetry = "0.23"
+opentelemetry-otlp = { version = "0.16", features = ["http-proto", "reqwest-rustls"] }
 opentelemetry_sdk = { version = "0.23", features = ["rt-tokio"] }
 tracing-opentelemetry = "0.24"
+
+# Testing
+tempfile = "3.0"
+regex = "1.10"
+
+# Workspace crates
+openclaw-core = { path = "crates/openclaw-core" }
+openclaw-gateway = { path = "crates/openclaw-gateway" }
 

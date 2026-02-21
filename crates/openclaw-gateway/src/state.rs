@@ -16,6 +16,7 @@ use crate::provider::create_provider_with_fallback;
 use crate::skills::{SkillRegistry, default_skills};
 use crate::tools::default_tools;
 use crate::voice::service::VoiceService;
+use crate::agent_router::AgentRouter;
 
 pub struct AppState {
     pub config: AppConfig,
@@ -34,6 +35,7 @@ pub struct AppState {
     pub oauth: Arc<OAuthManager>,
     pub mcp: Arc<McpManager>,
     pub pairing: Arc<PairingManager>,
+    pub agent_router: AgentRouter,
 }
 
 impl AppState {
@@ -104,6 +106,7 @@ impl AppState {
             oauth: Arc::new(OAuthManager::new()),
             mcp: Arc::new(McpManager::new()),
             pairing: Arc::new(PairingManager::new()),
+            agent_router: AgentRouter::new(),
         });
 
         let tools = default_tools(&config, cron.clone(), state.clone());
@@ -145,6 +148,7 @@ impl AppState {
             oauth: Arc::new(OAuthManager::new()),
             mcp: Arc::new(McpManager::new()),
             pairing: Arc::new(PairingManager::new()),
+            agent_router: AgentRouter::new(),
         });
 
         let tools = default_tools(&config, cron.clone(), state.clone());
