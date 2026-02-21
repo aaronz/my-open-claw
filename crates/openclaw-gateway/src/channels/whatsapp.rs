@@ -11,7 +11,7 @@ pub struct WhatsAppChannel {
     token: String,
     phone_number_id: String,
     client: reqwest::Client,
-    state: Weak<AppState>,
+    _state: Weak<AppState>,
 }
 
 impl WhatsAppChannel {
@@ -20,7 +20,7 @@ impl WhatsAppChannel {
             token,
             phone_number_id,
             client: reqwest::Client::new(),
-            state,
+            _state: state,
         }
     }
 }

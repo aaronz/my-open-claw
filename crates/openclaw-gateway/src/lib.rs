@@ -12,7 +12,6 @@ pub mod tools;
 pub mod voice;
 pub mod ws;
 
-use crate::channels::bluebubbles::BlueBubblesChannel;
 use crate::channels::discord::DiscordChannel;
 use crate::channels::matrix::MatrixChannel;
 use crate::channels::mattermost::MattermostChannel;

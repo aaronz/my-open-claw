@@ -1,5 +1,4 @@
 use dashmap::DashMap;
-use std::sync::Arc;
 use uuid::Uuid;
 
 pub struct PairingManager {

@@ -5,7 +5,6 @@ use chromiumoxide::Page;
 use futures::StreamExt;
 use openclaw_core::provider::ToolDefinition;
 use openclaw_core::{Tool, Result as CoreResult};
-use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::sync::Arc;
 use tokio::sync::Mutex;

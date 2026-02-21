@@ -3,10 +3,8 @@ pub mod gemini;
 pub mod openai;
 
 use openclaw_core::config::ProviderConfig;
-use openclaw_core::provider::{CompletionResponse, Provider, ToolDefinition};
-use openclaw_core::session::ChatMessage;
+use openclaw_core::provider::Provider;
 use std::sync::Arc;
-use tokio::sync::mpsc;
 
 pub fn create_provider(config: &ProviderConfig) -> Option<Arc<dyn Provider>> {
     let api_key = config.api_key.as_ref()?;
@@ -98,15 +96,15 @@ impl Provider for FailoverProvider {
 
     async fn stream_chat(
         &self,
-        messages: &[ChatMessage],
+        messages: &[openclaw_core::session::ChatMessage],
         system_prompt: Option<&str>,
         model: &str,
         max_tokens: Option<u32>,
         temperature: Option<f32>,
-        tools: Option<&[ToolDefinition]>,
-        mut token_tx: mpsc::Sender<String>,
-    ) -> openclaw_core::error::Result<CompletionResponse> {
-        let mut last_error = None;
+        tools: Option<&[openclaw_core::provider::ToolDefinition]>,
+        token_tx: tokio::sync::mpsc::Sender<String>,
+    ) -> openclaw_core::error::Result<openclaw_core::provider::CompletionResponse> {
+        let mut last_err = None;
         let mut current_index = 0;
 
         loop {
@@ -131,7 +129,7 @@ impl Provider for FailoverProvider {
                         provider.name(),
                         e
                     );
-                    last_error = Some(e);
+                    last_err = Some(e);
                     current_index = (current_index + 1) % self.providers.len();
 
                     if current_index == 0 {
@@ -141,7 +139,7 @@ impl Provider for FailoverProvider {
             }
         }
 
-        Err(last_error.unwrap_or_else(|| {
+        Err(last_err.unwrap_or_else(|| {
             openclaw_core::OpenClawError::Provider("All providers failed".to_string())
         }))
     }

@@ -14,7 +14,7 @@ pub struct AuthCallback {
 }
 
 pub async fn oauth_callback(
-    State(state): State<Arc<AppState>>,
+    State(_state): State<Arc<AppState>>,
     Query(callback): Query<AuthCallback>,
 ) -> impl IntoResponse {
     let parts: Vec<&str> = callback.state.split(':').collect();

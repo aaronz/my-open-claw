@@ -13,6 +13,10 @@ A powerful, multi-channel, autonomous AI agent gateway written in Rust. Port of 
     -   **Discord**: Full support (Text, Voice, Images, Threads).
     -   **Slack**: Inbound/Outbound via Socket Mode.
     -   **WhatsApp**: Support via Cloud API.
+    -   **Signal**: Bridge support.
+    -   **Matrix**: Decentralized messaging.
+    -   **BlueBubbles**: iMessage integration.
+    -   **Mattermost**: Enterprise chat.
     -   **Web/CLI**: Real-time WebSocket interface with Artifact support.
 -   **🛠️ Tools & Capabilities**:
     -   **Browser Control**: Headless Chrome for web interaction and data extraction.
@@ -20,46 +24,46 @@ A powerful, multi-channel, autonomous AI agent gateway written in Rust. Port of 
     -   **YouTube Search**: Find and display video information directly.
     -   **Web Search**: Real-time information via Tavily.
     -   **Code Interpreter**: Safe(ish) Python execution for calculations and logic.
+    -   **Shell**: Local command execution (guarded).
+    -   **Cron**: Reminders and recurring tasks.
 -   **🧩 Skills System**:
     -   **GitHub**: Manage issues and get repository information (authenticated).
     -   **Obsidian**: Read and update your local vault notes.
     -   **Spotify**: Control playback and search music.
-    -   **Notes**: Apple Notes integration.
+    -   **Linear**: Issue and project management.
+    -   **Google**: Calendar and Sheets integration.
+    -   **Todoist**: Task management.
+    -   **1Password**: Secret retrieval simulation.
     -   **Custom Skills**: Easily extensible via the Skill trait.
 -   **💾 Long-term Memory**:
-    -   **Vector RAG**: Stores every interaction in Qdrant (local Docker).
+    -   **Vector RAG**: Stores every interaction in Qdrant (local Docker) or In-memory.
+    -   **SQLite Persistence**: Robust local session and message history.
     -   **Context Compaction**: Automatically summarizes long conversations to save tokens.
-    -   **Persistence**: Session state saved to disk.
 -   **🛡️ Reliability**:
     -   **Model Failover**: Automatically rotates through providers on failure.
     -   **Presence**: Real-time online/offline status updates.
     -   **OAuth**: Secure skill authentication infrastructure.
--   **🤖 Headless Autonomy**: Webhook endpoint (`/api/webhook`) triggers agent logic autonomously.
+-   **🤖 Headless Autonomy**: Webhook endpoints triggers agent logic autonomously.
 -   **🐳 Production Ready**: Docker & Docker Compose support.
 
-## 🚀 Quick Start (Docker)
+## 🚀 Quick Start
 
-1.  **Configure**: Edit `docker-compose.yml` or `config/config.yaml` (see Configuration below).
-2.  **Run**:
+1.  **Dev Mode (Minimal Dependencies)**:
     ```bash
-    docker-compose up -d
+    cargo run -p openclaw-cli -- dev
     ```
-3.  **Chat**: Use the CLI or connect your Telegram/Discord bot.
+    Starts the gateway with Mock AI and In-memory storage. No keys required.
 
-## 🛠️ Manual Installation
+2.  **Production (Wizard)**:
+    ```bash
+    cargo run -p openclaw-cli -- onboard
+    ```
+    Guides you through setting up OpenAI/Claude and Qdrant.
 
-Requirements: Rust 1.75+, `libclang` (for some crates), Docker (for Qdrant).
-
-```bash
-# 1. Start Vector DB
-docker run -p 6333:6333 qdrant/qdrant
-
-# 2. Configure (Wizard)
-cargo run -p openclaw-cli -- onboard
-
-# 3. Start Gateway
-cargo run -p openclaw-cli -- gateway
-```
+3.  **Start Gateway**:
+    ```bash
+    cargo run -p openclaw-cli -- gateway
+    ```
 
 ## ⚙️ Configuration
 

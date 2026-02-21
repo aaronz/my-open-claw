@@ -1,11 +1,10 @@
 use async_trait::async_trait;
 use openclaw_core::provider::ToolDefinition;
 use openclaw_core::{Tool, Result as CoreResult};
-use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::process::Stdio;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::process::{Child, Command};
+use tokio::process::Command;
 use tokio::sync::Mutex;
 use std::sync::Arc;
 

@@ -8,7 +8,7 @@ use std::sync::{Arc, Weak};
 use uuid::Uuid;
 
 pub struct BlueBubblesChannel {
-    state: Weak<AppState>,
+    _state: Weak<AppState>,
     api_url: String,
     password: String,
     client: reqwest::Client,
@@ -17,7 +17,7 @@ pub struct BlueBubblesChannel {
 impl BlueBubblesChannel {
     pub fn new(api_url: String, password: String, state: Weak<AppState>) -> Self {
         Self {
-            state,
+            _state: state,
             api_url,
             password,
             client: reqwest::Client::new(),

@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use openclaw_core::session::{ChatMessage, Role};
-use openclaw_core::{ChannelKind, WsMessage};
+use openclaw_core::WsMessage;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::info;

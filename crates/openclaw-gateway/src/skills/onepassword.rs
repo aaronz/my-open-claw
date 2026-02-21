@@ -1,7 +1,6 @@
 use async_trait::async_trait;
 use openclaw_core::provider::ToolDefinition;
 use serde_json::json;
-use std::process::Command;
 
 use super::Skill;
 

@@ -109,7 +109,7 @@ pub async fn run_agent_cycle(state: Arc<AppState>, session_id: Uuid) {
         let typing_state = Arc::clone(&state);
         let typing_session_id = session_id;
         let typing_channel = channel.clone();
-        let typing_handle = tokio::spawn(async move {
+        let _typing_handle = tokio::spawn(async move {
             if let Some(chan) = typing_state.channels.get(&typing_channel) {
                 if let Some(session) = typing_state.sessions.get(&typing_session_id) {
                     let peer_id = session.peer_id.clone();

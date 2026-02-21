@@ -64,7 +64,6 @@ pub async fn handle_mattermost_webhook(state: Arc<AppState>, body: serde_json::V
     if let Some(post) = body.get("post") {
         let channel_id = post["channel_id"].as_str().unwrap_or_default();
         let text = post["message"].as_str().unwrap_or_default();
-        let user_id = post["user_id"].as_str().unwrap_or_default();
 
         if !channel_id.is_empty() && !text.is_empty() {
             let kind = ChannelKind::Api;

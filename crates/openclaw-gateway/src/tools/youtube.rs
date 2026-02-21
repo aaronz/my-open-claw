@@ -4,13 +4,13 @@ use serde_json::{json, Value};
 use reqwest::Client;
 
 pub struct YouTubeTool {
-    client: Client,
+    _client: Client,
 }
 
 impl YouTubeTool {
     pub fn new() -> Self {
         Self {
-            client: Client::new(),
+            _client: Client::new(),
         }
     }
 }

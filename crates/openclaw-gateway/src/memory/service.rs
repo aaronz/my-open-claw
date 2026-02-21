@@ -1,17 +1,17 @@
 use anyhow::Result;
 use fastembed::{EmbeddingModel, InitOptions, TextEmbedding};
 use openclaw_core::AppConfig;
-use qdrant_client::prelude::*;
 use qdrant_client::qdrant::{
-    CreateCollection, Distance, PointStruct, SearchPoints, VectorParams, VectorsConfig,
+    CreateCollection, Distance, PointStruct, SearchPoints, VectorParams, VectorsConfig, Value,
 };
+use qdrant_client::{Payload, Qdrant};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
 enum MemoryBackend {
     Qdrant {
-        client: Arc<QdrantClient>,
+        client: Arc<Qdrant>,
         collection_name: String,
     },
     InMemory {
@@ -46,7 +46,7 @@ impl MemoryService {
             });
         }
 
-        match QdrantClient::from_url(&config.memory.qdrant_url).build() {
+        match Qdrant::from_url(&config.memory.qdrant_url).build() {
             Ok(client) => {
                 let service = Self {
                     backend: Arc::new(MemoryBackend::Qdrant {
@@ -82,7 +82,7 @@ impl MemoryService {
         if let MemoryBackend::Qdrant { client, collection_name } = &*self.backend {
             if !client.collection_exists(collection_name).await? {
                 client
-                    .create_collection(&CreateCollection {
+                    .create_collection(CreateCollection {
                         collection_name: collection_name.clone(),
                         vectors_config: Some(VectorsConfig {
                             config: Some(qdrant_client::qdrant::vectors_config::Config::Params(
@@ -125,7 +125,11 @@ impl MemoryService {
                     payload,
                 );
 
-                client.upsert_points(collection_name.clone(), None, vec![point], None).await?;
+                client.upsert_points(qdrant_client::qdrant::UpsertPoints {
+                    collection_name: collection_name.clone(),
+                    points: vec![point],
+                    ..Default::default()
+                }).await?;
             }
             MemoryBackend::InMemory { data } => {
                 let mut guard = data.lock().await;
@@ -146,7 +150,7 @@ impl MemoryService {
                 };
 
                 let search_result = client
-                    .search_points(&SearchPoints {
+                    .search_points(SearchPoints {
                         collection_name: collection_name.clone(),
                         vector: embedding,
                         limit,
@@ -157,11 +161,8 @@ impl MemoryService {
 
                 let mut results = Vec::new();
                 for point in search_result.result {
-                    if let Some(payload) = point.payload.get("text") {
-                        let json_val = serde_json::to_value(payload).unwrap_or_default();
-                        if let Some(s) = json_val.as_str() {
-                            results.push(s.to_string());
-                        }
+                    if let Some(Value { kind: Some(qdrant_client::qdrant::value::Kind::StringValue(s)), .. }) = point.payload.get("text") {
+                        results.push(s.clone());
                     }
                 }
                 Ok(results)

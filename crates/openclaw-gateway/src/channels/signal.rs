@@ -8,14 +8,14 @@ use std::sync::{Arc, Weak};
 use uuid::Uuid;
 
 pub struct SignalChannel {
-    state: Weak<AppState>,
+    _state: Weak<AppState>,
     api_url: String, 
 }
 
 impl SignalChannel {
     pub fn new(api_url: String, state: Weak<AppState>) -> Self {
         Self {
-            state,
+            _state: state,
             api_url,
         }
     }
