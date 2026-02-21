@@ -94,5 +94,18 @@ pub async fn run(args: OnboardArgs) -> anyhow::Result<()> {
     }
 
     println!("\n{}", "🦞 Setup complete! Run `openclaw gateway` to start.".bold().green());
+
+    let pair_mobile = Select::new()
+        .with_prompt("Pair with mobile device (Node)?")
+        .items(&["No", "Yes (Show pairing QR code)"])
+        .default(0)
+        .interact()?;
+
+    if pair_mobile == 1 {
+        let pairing_data = format!("openclaw://pair?gateway=http://localhost:{}", port);
+        println!("\n{}", "Scan this code with the OpenClaw mobile app:".bold());
+        qr2term::print_qr(&pairing_data).map_err(|e| anyhow::anyhow!(e))?;
+    }
+
     Ok(())
 }

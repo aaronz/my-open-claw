@@ -9,6 +9,8 @@ pub struct AgentArgs {
     pub message: String,
     #[arg(long, default_value = "medium")]
     pub thinking: String,
+    #[arg(long)]
+    pub voice: bool,
 }
 
 pub async fn run(args: AgentArgs, config: AppConfig) -> anyhow::Result<()> {

@@ -55,3 +55,4 @@ chromiumoxide = { version = "0.6", features = ["tokio-runtime"] }
 headless_chrome = "1"
 image = "0.25"
 base64 = "0.22"
+qr2term = "0.3"
