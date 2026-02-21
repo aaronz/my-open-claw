@@ -95,6 +95,9 @@ pub mod notes;
 pub mod spotify;
 pub mod obsidian;
 pub mod memory;
+pub mod notion;
+pub mod onepassword;
+pub mod node;
 
 pub use github::GitHubSkill;
 pub use slack::SlackSkill;
@@ -104,8 +107,11 @@ pub use notes::NotesSkill;
 pub use spotify::SpotifySkill;
 pub use obsidian::ObsidianSkill;
 pub use memory::MemorySkill;
+pub use notion::NotionSkill;
+pub use onepassword::OnePasswordSkill;
+pub use node::NodeSkill;
 
-pub fn default_skills(github_token: Option<String>, obsidian_path: Option<String>) -> SkillRegistry {
+pub fn default_skills(github_token: Option<String>, obsidian_path: Option<String>, notion_token: Option<String>) -> SkillRegistry {
     let mut registry = SkillRegistry::new();
     
     registry.register(Box::new(WeatherSkill));
@@ -115,6 +121,9 @@ pub fn default_skills(github_token: Option<String>, obsidian_path: Option<String
     registry.register(Box::new(NotesSkill));
     registry.register(Box::new(SpotifySkill));
     registry.register(Box::new(ObsidianSkill::new(obsidian_path)));
+    registry.register(Box::new(NotionSkill::new(notion_token)));
+    registry.register(Box::new(OnePasswordSkill));
+    registry.register(Box::new(NodeSkill));
     registry.register(Box::new(MemorySkill::new(None)));
     
     registry

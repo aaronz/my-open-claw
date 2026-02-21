@@ -102,6 +102,7 @@ pub struct AgentConfig {
     pub tavily_api_key: Option<String>,
     pub github_token: Option<String>,
     pub obsidian_path: Option<String>,
+    pub notion_token: Option<String>,
     #[serde(default)]
     pub mcp_servers: Vec<McpServerConfig>,
 }
@@ -271,6 +272,7 @@ impl Default for AgentConfig {
             tavily_api_key: None,
             github_token: None,
             obsidian_path: None,
+            notion_token: None,
             mcp_servers: vec![],
         }
     }
