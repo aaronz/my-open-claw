@@ -2,6 +2,7 @@ pub mod browser;
 pub mod brave;
 pub mod canvas;
 pub mod cron;
+pub mod elevenlabs;
 pub mod fs;
 pub mod perplexity;
 pub mod openrouter;
@@ -37,6 +38,17 @@ pub fn default_tools(config: &AppConfig, cron: Arc<CronScheduler>, state: Arc<Ap
 
     let youtube = youtube::YouTubeTool::new();
     tools.insert(youtube.definition().name, Box::new(youtube));
+
+    let cron_tool = cron::CronTool::new(cron);
+    tools.insert(cron_tool.definition().name, Box::new(cron_tool));
+
+    let shell = shell::ShellTool;
+    tools.insert(shell.definition().name, Box::new(shell));
+
+    if let Some(key) = &config.agent.elevenlabs_api_key {
+        let el = elevenlabs::ElevenLabsTool::new(key.clone());
+        tools.insert(el.definition().name, Box::new(el));
+    }
 
     if let Some(key) = &config.agent.brave_api_key {
         let brave = brave::BraveSearchTool::new(key.clone());
