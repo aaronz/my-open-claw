@@ -12,6 +12,7 @@ pub mod tools;
 pub mod voice;
 pub mod ws;
 
+use crate::channels::bluebubbles::BlueBubblesChannel;
 use crate::channels::discord::DiscordChannel;
 use crate::channels::matrix::MatrixChannel;
 use crate::channels::signal::SignalChannel;
@@ -176,6 +177,16 @@ pub async fn start_gateway(config: AppConfig) -> openclaw_core::Result<()> {
                     }
                 }
             }
+        }
+    }
+
+    if let Some(bluebubbles_config) = &state.config.channels.whatsapp {
+        if bluebubbles_config.enabled {
+             if let (Some(url), Some(pass)) = (&bluebubbles_config.token, &bluebubbles_config.app_token) {
+                let channel = BlueBubblesChannel::new(url.clone(), pass.clone(), Arc::downgrade(&state));
+                info!("BlueBubbles channel started");
+                state.channels.insert(ChannelKind::Api, Arc::new(channel));
+             }
         }
     }
 

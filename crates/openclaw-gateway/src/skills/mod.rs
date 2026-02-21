@@ -98,6 +98,7 @@ pub mod memory;
 pub mod notion;
 pub mod onepassword;
 pub mod node;
+pub mod docker;
 
 pub use github::GitHubSkill;
 pub use slack::SlackSkill;
@@ -110,6 +111,7 @@ pub use memory::MemorySkill;
 pub use notion::NotionSkill;
 pub use onepassword::OnePasswordSkill;
 pub use node::NodeSkill;
+pub use docker::DockerSkill;
 
 pub fn default_skills(github_token: Option<String>, obsidian_path: Option<String>, notion_token: Option<String>) -> SkillRegistry {
     let mut registry = SkillRegistry::new();
@@ -124,6 +126,7 @@ pub fn default_skills(github_token: Option<String>, obsidian_path: Option<String
     registry.register(Box::new(NotionSkill::new(notion_token)));
     registry.register(Box::new(OnePasswordSkill));
     registry.register(Box::new(NodeSkill));
+    registry.register(Box::new(DockerSkill));
     registry.register(Box::new(MemorySkill::new(None)));
     
     registry
