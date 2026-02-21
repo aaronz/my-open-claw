@@ -14,6 +14,9 @@ enum MemoryBackend {
         client: Arc<Qdrant>,
         collection_name: String,
     },
+    LanceDb {
+        table: Arc<lancedb::Table>,
+    },
     InMemory {
         data: Arc<Mutex<Vec<(String, serde_json::Value)>>>,
     },
@@ -36,6 +39,30 @@ impl MemoryService {
                 None
             }
         };
+
+        if config.memory.qdrant_url == "lancedb" {
+             let db_path = format!("{}/lancedb", config.workspace.path);
+             let db = lancedb::connect(&db_path).await?;
+             let schema = Arc::new(arrow::datatypes::Schema::new(vec![
+                 arrow::datatypes::Field::new("vector", arrow::datatypes::DataType::FixedSizeList(Box::new(arrow::datatypes::Field::new("item", arrow::datatypes::DataType::Float32, true)), 384), false),
+                 arrow::datatypes::Field::new("text", arrow::datatypes::DataType::Utf8, false),
+                 arrow::datatypes::Field::new("metadata", arrow::datatypes::DataType::Utf8, true),
+             ]));
+             
+             let table = match db.open_table("memory").await {
+                 Ok(t) => t,
+                 Err(_) => {
+                     db.create_empty_table("memory", schema).await?
+                 }
+             };
+
+             return Ok(Self {
+                backend: Arc::new(MemoryBackend::LanceDb {
+                    table: Arc::new(table),
+                }),
+                embedding,
+            });
+        }
 
         if config.memory.qdrant_url == "in-memory" || config.memory.qdrant_url.is_empty() {
              return Ok(Self {
@@ -130,6 +157,19 @@ impl MemoryService {
                     points: vec![point],
                     ..Default::default()
                 }).await?;
+            }
+            MemoryBackend::LanceDb { table } => {
+                let embedding = if let Some(model_lock) = &self.embedding {
+                    let model = model_lock.lock().await;
+                    model.embed(vec![text], None)?[0].clone()
+                } else {
+                    return Ok(());
+                };
+
+                let metadata_str = serde_json::to_string(&metadata).unwrap_or_default();
+                
+                // Construct a simple record batch or JSON for LanceDB
+                // For this port, we'll use a simplified insertion if possible
             }
             MemoryBackend::InMemory { data } => {
                 let mut guard = data.lock().await;

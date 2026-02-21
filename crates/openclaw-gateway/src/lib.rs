@@ -13,6 +13,7 @@ pub mod voice;
 pub mod ws;
 
 use crate::channels::discord::DiscordChannel;
+use crate::channels::feishu::FeishuChannel;
 use crate::channels::matrix::MatrixChannel;
 use crate::channels::mattermost::MattermostChannel;
 use crate::channels::signal::SignalChannel;
@@ -177,6 +178,16 @@ pub async fn start_gateway(config: AppConfig) -> openclaw_core::Result<()> {
                     }
                 }
             }
+        }
+    }
+
+    if let Some(feishu_config) = &state.config.channels.telegram {
+        if feishu_config.enabled && feishu_config.dm_policy == openclaw_core::config::DmPolicy::Open {
+             if let (Some(app_id), Some(app_secret)) = (&feishu_config.token, &feishu_config.app_token) {
+                let channel = FeishuChannel::new(app_id.clone(), app_secret.clone(), Arc::downgrade(&state));
+                info!("Feishu channel started");
+                state.channels.insert(ChannelKind::Api, Arc::new(channel));
+             }
         }
     }
 

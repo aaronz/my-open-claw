@@ -107,6 +107,10 @@ pub struct AgentConfig {
     pub google_token: Option<String>,
     pub linear_token: Option<String>,
     pub todoist_token: Option<String>,
+    pub brave_api_key: Option<String>,
+    pub perplexity_api_key: Option<String>,
+    pub openrouter_api_key: Option<String>,
+    pub elevenlabs_api_key: Option<String>,
     #[serde(default)]
     pub mcp_servers: Vec<McpServerConfig>,
 }
@@ -280,6 +284,10 @@ impl Default for AgentConfig {
             google_token: None,
             linear_token: None,
             todoist_token: None,
+            brave_api_key: None,
+            perplexity_api_key: None,
+            openrouter_api_key: None,
+            elevenlabs_api_key: None,
             mcp_servers: vec![],
         }
     }

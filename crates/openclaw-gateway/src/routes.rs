@@ -23,7 +23,25 @@ pub fn api_router() -> Router<Arc<AppState>> {
         .route("/api/webhook/matrix", post(matrix_webhook))
         .route("/api/webhook/mattermost", post(mattermost_webhook))
         .route("/api/webhook/bluebubbles", post(bluebubbles_webhook))
+        .route("/api/webhook/feishu", post(feishu_webhook))
+        .route("/api/webhook/zulip", post(zulip_webhook))
         .route("/api/memory", post(ingest_memory))
+}
+
+async fn feishu_webhook(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<Value>,
+) -> impl axum::response::IntoResponse {
+    let _ = crate::channels::feishu::handle_feishu_webhook(state, body).await;
+    axum::http::StatusCode::OK
+}
+
+async fn zulip_webhook(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<Value>,
+) -> impl axum::response::IntoResponse {
+    let _ = crate::channels::zulip::handle_zulip_webhook(state, body).await;
+    axum::http::StatusCode::OK
 }
 
 async fn bluebubbles_webhook(

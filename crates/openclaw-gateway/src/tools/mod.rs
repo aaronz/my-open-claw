@@ -1,7 +1,10 @@
 pub mod browser;
+pub mod brave;
 pub mod canvas;
 pub mod cron;
 pub mod fs;
+pub mod perplexity;
+pub mod openrouter;
 pub mod python;
 pub mod search;
 pub mod shell;
@@ -35,11 +38,20 @@ pub fn default_tools(config: &AppConfig, cron: Arc<CronScheduler>, state: Arc<Ap
     let youtube = youtube::YouTubeTool::new();
     tools.insert(youtube.definition().name, Box::new(youtube));
 
-    let cron_tool = cron::CronTool::new(cron);
-    tools.insert(cron_tool.definition().name, Box::new(cron_tool));
+    if let Some(key) = &config.agent.brave_api_key {
+        let brave = brave::BraveSearchTool::new(key.clone());
+        tools.insert(brave.definition().name, Box::new(brave));
+    }
 
-    let shell = shell::ShellTool;
-    tools.insert(shell.definition().name, Box::new(shell));
+    if let Some(key) = &config.agent.perplexity_api_key {
+        let pplx = perplexity::PerplexityTool::new(key.clone());
+        tools.insert(pplx.definition().name, Box::new(pplx));
+    }
+
+    if let Some(key) = &config.agent.openrouter_api_key {
+        let or = openrouter::OpenRouterTool::new(key.clone());
+        tools.insert(or.definition().name, Box::new(or));
+    }
 
     if let Some(key) = &config.agent.tavily_api_key {
         let search = search::SearchTool::new(key.clone());

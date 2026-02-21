@@ -1,4 +1,7 @@
 pub mod bluebubbles;
+pub mod feishu;
+pub mod zulip;
+pub mod gotify;
 pub mod discord;
 pub mod matrix;
 pub mod mattermost;
