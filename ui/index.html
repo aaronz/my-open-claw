@@ -5,6 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>OpenClaw Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      @keyframes wave {
+        0%, 100% { transform: scaleY(0.5); }
+        50% { transform: scaleY(1); }
+      }
+      .animate-wave {
+        animation: wave 1s ease-in-out infinite;
+        transform-origin: center;
+      }
+      @keyframes shimmer {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(100%); }
+      }
+      .animate-shimmer {
+        animation: shimmer 1.5s infinite;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

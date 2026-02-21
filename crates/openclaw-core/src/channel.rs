@@ -15,6 +15,7 @@ pub enum ChannelKind {
     WebChat,
     Cli,
     Api,
+    Matrix,
 }
 
 impl std::fmt::Display for ChannelKind {
@@ -28,6 +29,7 @@ impl std::fmt::Display for ChannelKind {
             Self::WebChat => write!(f, "webchat"),
             Self::Cli => write!(f, "cli"),
             Self::Api => write!(f, "api"),
+            Self::Matrix => write!(f, "matrix"),
         }
     }
 }

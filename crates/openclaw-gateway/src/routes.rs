@@ -20,7 +20,16 @@ pub fn api_router() -> Router<Arc<AppState>> {
         .route("/api/webhook", post(webhook))
         .route("/api/webhook/whatsapp", post(whatsapp_webhook))
         .route("/api/webhook/signal", post(signal_webhook))
+        .route("/api/webhook/matrix", post(matrix_webhook))
         .route("/api/memory", post(ingest_memory))
+}
+
+async fn matrix_webhook(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<Value>,
+) -> impl axum::response::IntoResponse {
+    let _ = crate::channels::matrix::handle_matrix_webhook(state, body).await;
+    axum::http::StatusCode::OK
 }
 
 async fn whatsapp_webhook(

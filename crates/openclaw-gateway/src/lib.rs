@@ -13,10 +13,11 @@ pub mod voice;
 pub mod ws;
 
 use crate::channels::discord::DiscordChannel;
+use crate::channels::matrix::MatrixChannel;
+use crate::channels::signal::SignalChannel;
 use crate::channels::slack::SlackChannel;
 use crate::channels::telegram::TelegramChannel;
 use crate::channels::whatsapp::WhatsAppChannel;
-use crate::channels::signal::SignalChannel;
 use axum::middleware;
 use axum::routing::get;
 use axum::Router;
@@ -149,6 +150,29 @@ pub async fn start_gateway(config: AppConfig) -> openclaw_core::Result<()> {
                     }
                     Err(e) => {
                         tracing::error!("Failed to start Signal channel: {}", e);
+                    }
+                }
+            }
+        }
+    }
+
+    if let Some(matrix_config) = &state.config.channels.matrix {
+        if matrix_config.enabled {
+            if let (Some(homeserver), Some(token)) =
+                (&matrix_config.token, &matrix_config.app_token)
+            {
+                let channel = MatrixChannel::new(
+                    homeserver.clone(),
+                    token.clone(),
+                    Arc::downgrade(&state),
+                );
+                match channel.start().await {
+                    Ok(_) => {
+                        info!("Matrix channel started");
+                        state.channels.insert(ChannelKind::Matrix, Arc::new(channel));
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to start Matrix channel: {}", e);
                     }
                 }
             }

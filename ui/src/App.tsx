@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, User, Bot, Loader2, Maximize2, Layout } from 'lucide-react';
+import { Send, User, Bot, Loader2, Maximize2, Layout, Mic, MicOff } from 'lucide-react';
 
 interface Message {
   id?: string;
@@ -7,6 +7,214 @@ interface Message {
   content: string;
   images?: string[];
 }
+
+function App() {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState('');
+  const [thinking, setThinking] = useState(false);
+  const [canvas, setCanvas] = useState<{title?: string, content: string, language?: string} | null>(null);
+  const [toolStatus, setToolStatus] = useState<string | null>(null);
+  const [connected, setConnected] = useState(false);
+  const [talkMode, setTalkMode] = useState(false);
+  const ws = useRef<WebSocket | null>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host === 'localhost:5173' ? 'localhost:18789' : window.location.host;
+    ws.current = new WebSocket(`${protocol}//${host}/ws`);
+
+    ws.current.onopen = () => setConnected(true);
+    ws.current.onclose = () => setConnected(false);
+
+    ws.current.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+      if (msg.type === 'agent_thinking') {
+        setThinking(true);
+        setToolStatus(null);
+      } else if (msg.type === 'agent_response') {
+        setThinking(false);
+        setToolStatus(null);
+        setMessages(prev => {
+          const last = prev[prev.length - 1];
+          if (last && last.role === 'assistant') {
+            return [...prev.slice(0, -1), { ...last, content: last.content + msg.content }];
+          }
+          return [...prev, { role: 'assistant', content: msg.content }];
+        });
+      } else if (msg.type === 'canvas_update') {
+        setCanvas({ title: msg.title, content: msg.content, language: msg.language });
+      } else if (msg.type === 'new_message') {
+        if (msg.message.role === 'assistant' || msg.message.role === 'system') {
+           setMessages(prev => [...prev, msg.message]);
+        }
+      } else if (msg.type === 'presence_update') {
+        console.log("Presence:", msg.status);
+      }
+    };
+
+    return () => ws.current?.close();
+  }, []);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, thinking]);
+
+  const sendMessage = () => {
+    if (!input.trim() || !ws.current) return;
+    setMessages(prev => [...prev, { role: 'user', content: input }]);
+    ws.current.send(JSON.stringify({
+      type: 'send_message',
+      content: input,
+      channel: 'webchat',
+      peer_id: 'browser-user'
+    }));
+    setInput('');
+  };
+
+  const toggleTalkMode = () => {
+    setTalkMode(!talkMode);
+  };
+
+  return (
+    <div className="flex h-screen bg-gray-50 overflow-hidden">
+      <div className={`flex flex-col ${canvas ? 'w-1/3' : 'w-full'} border-r bg-white transition-all duration-300`}>
+        <header className="p-4 border-b flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold shadow-md">OC</div>
+            <h1 className="font-bold text-xl tracking-tight text-gray-800">OpenClaw</h1>
+          </div>
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={toggleTalkMode}
+              className={`p-2 rounded-full transition-all ${talkMode ? 'bg-red-100 text-red-600 animate-pulse' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+              title="Toggle Talk Mode"
+            >
+              {talkMode ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
+            </button>
+            <div className={`w-2.5 h-2.5 rounded-full ${connected ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]'}`} title={connected ? 'Connected' : 'Disconnected'} />
+          </div>
+        </header>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {talkMode && (
+            <div className="bg-blue-600 rounded-2xl p-8 flex flex-col items-center justify-center gap-6 shadow-xl animate-in zoom-in-95 duration-300 mx-4 my-2">
+              <div className="flex items-center gap-1 h-12">
+                {[...Array(12)].map((_, i) => (
+                  <div 
+                    key={i} 
+                    className="w-1.5 bg-white/80 rounded-full animate-wave" 
+                    style={{ 
+                      height: `${20 + Math.random() * 80}%`, 
+                      animationDelay: `${i * 0.05}s`,
+                      opacity: 0.4 + (Math.random() * 0.6)
+                    }} 
+                  />
+                ))}
+              </div>
+              <p className="text-white/90 font-medium text-lg">Listening...</p>
+              <button onClick={() => setTalkMode(false)} className="bg-white text-blue-600 px-6 py-2 rounded-full font-bold hover:bg-gray-100 transition-colors shadow-lg">Stop</button>
+            </div>
+          )}
+
+          {messages.map((m, i) => (
+            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : (m.role === 'system' ? 'justify-center' : 'justify-start')}`}>
+              <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
+                m.role === 'user' 
+                  ? 'bg-blue-600 text-white rounded-br-none shadow-md' 
+                  : (m.role === 'system' ? 'bg-amber-50 text-amber-700 text-[10px] font-bold uppercase tracking-widest rounded-lg border border-amber-100 px-3 py-1.5 shadow-sm' : 'bg-gray-100 text-gray-800 rounded-bl-none border border-gray-200 shadow-sm')
+              }`}>
+                {m.images && m.images.length > 0 && (
+                  <div className="grid grid-cols-2 gap-2 mb-2">
+                    {m.images.map((img, idx) => (
+                      <img key={idx} src={`data:image/jpeg;base64,${img}`} className="rounded-lg w-full h-auto border border-white/20" alt="attached" />
+                    ))}
+                  </div>
+                )}
+                <div className="whitespace-pre-wrap leading-relaxed">{m.content}</div>
+              </div>
+            </div>
+          ))}
+          {thinking && (
+            <div className="flex justify-start">
+              <div className="bg-white text-gray-500 rounded-2xl px-4 py-3 flex flex-col gap-3 italic text-sm border border-gray-200 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                  <span className="font-medium">{toolStatus || 'OpenClaw is thinking...'}</span>
+                </div>
+                <div className="flex gap-1 h-1.5 items-center px-1">
+                  {[1,2,3,4,5,6,7].map(i => (
+                    <div key={i} className="flex-1 bg-blue-400/30 rounded-full overflow-hidden h-full">
+                      <div className="bg-blue-500 h-full w-full animate-shimmer" style={{ animationDelay: `${i * 0.1}s` }} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+          <div ref={chatEndRef} />
+        </div>
+
+        <div className="p-4 border-t bg-white">
+          <div className="relative flex items-center max-w-4xl mx-auto w-full group">
+            <input
+              type="text"
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && sendMessage()}
+              placeholder="Message OpenClaw..."
+              className="w-full bg-gray-50 border border-gray-200 rounded-full py-3.5 px-6 pr-14 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-sm outline-none transition-all group-hover:bg-white"
+            />
+            <button 
+              onClick={sendMessage}
+              disabled={!connected}
+              className={`absolute right-2 p-2.5 rounded-full transition-all ${connected ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:scale-105 active:scale-95' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+            >
+              <Send className="w-4.5 h-4.5" />
+            </button>
+          </div>
+          <p className="text-[10px] text-center text-gray-400 mt-2 font-medium uppercase tracking-tighter">OpenClaw lobster-port v0.1.0-alpha</p>
+        </div>
+      </div>
+
+      {canvas && (
+        <div className="flex-1 flex flex-col bg-white h-full animate-in slide-in-from-right duration-500 shadow-2xl z-10 border-l border-gray-200">
+          <header className="p-4 border-b flex justify-between items-center bg-white/80 backdrop-blur-md sticky top-0 z-20">
+            <div className="flex items-center gap-3">
+              <div className="p-1.5 bg-blue-50 rounded-lg">
+                <Layout className="w-4 h-4 text-blue-600" />
+              </div>
+              <span className="font-bold text-gray-800 tracking-tight">{canvas.title || 'Artifact'}</span>
+              {canvas.language && <span className="text-[10px] bg-gray-100 border border-gray-200 px-2.5 py-0.5 rounded-full text-gray-500 uppercase font-black tracking-widest">{canvas.language}</span>}
+            </div>
+            <div className="flex items-center gap-2">
+               <button onClick={() => setCanvas(null)} className="p-2 hover:bg-gray-100 rounded-xl text-gray-400 hover:text-gray-600 transition-colors">
+                <Maximize2 className="w-4.5 h-4.5" />
+              </button>
+            </div>
+          </header>
+          <div className="flex-1 overflow-auto bg-gray-50/50">
+             <div className="max-w-5xl mx-auto p-8 lg:p-12 h-full">
+                <div className="bg-white rounded-3xl shadow-2xl shadow-blue-900/5 border border-gray-200/50 h-full flex flex-col overflow-hidden ring-1 ring-black/5">
+                  <div className="p-2 bg-gray-50/50 border-b border-gray-100 flex gap-2 px-6 items-center h-10">
+                    <div className="w-2.5 h-2.5 rounded-full bg-gray-300" />
+                    <div className="w-2.5 h-2.5 rounded-full bg-gray-300" />
+                    <div className="w-2.5 h-2.5 rounded-full bg-gray-300" />
+                  </div>
+                  <pre className="flex-1 font-mono text-[13px] p-8 lg:p-10 overflow-auto whitespace-pre-wrap selection:bg-blue-500 selection:text-white leading-relaxed text-gray-800">
+                    {canvas.content}
+                  </pre>
+                </div>
+             </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default App;
+
 
 function App() {
   const [messages, setMessages] = useState<Message[]>([]);

@@ -69,6 +69,7 @@ pub struct ChannelsConfig {
     pub slack: Option<ChannelInstanceConfig>,
     pub whatsapp: Option<ChannelInstanceConfig>,
     pub signal: Option<ChannelInstanceConfig>,
+    pub matrix: Option<ChannelInstanceConfig>,
     pub webchat: Option<ChannelInstanceConfig>,
 }
 
