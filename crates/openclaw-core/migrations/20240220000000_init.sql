@@ -24,3 +24,11 @@ CREATE TABLE IF NOT EXISTS messages (
 -- Create index for faster lookups
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_peer ON sessions(channel, peer_id);
 CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id);
+
+-- Create embeddings table
+CREATE TABLE IF NOT EXISTS embeddings (
+    id TEXT PRIMARY KEY,
+    content TEXT NOT NULL,
+    vector TEXT NOT NULL, -- Storing as JSON string
+    created_at DATETIME NOT NULL
+);

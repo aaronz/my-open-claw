@@ -113,7 +113,39 @@ pub struct AgentConfig {
     pub elevenlabs_api_key: Option<String>,
     #[serde(default)]
     pub mcp_servers: Vec<McpServerConfig>,
+    #[serde(default)]
+    pub diagnostics: DiagnosticsConfig,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct DiagnosticsConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub otel: OtelConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OtelConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_otel_endpoint")]
+    pub endpoint: String,
+}
+
+fn default_otel_endpoint() -> String {
+    "http://localhost:4318".to_string()
+}
+
+impl Default for OtelConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            endpoint: default_otel_endpoint(),
+        }
+    }
+}
+
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct McpServerConfig {
@@ -173,11 +205,18 @@ pub struct ModelsConfig {
 pub struct MemoryConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
+    #[serde(default = "default_backend")]
+    pub backend: String,
     #[serde(default = "default_qdrant_url")]
     pub qdrant_url: String,
     #[serde(default = "default_collection_name")]
     pub collection_name: String,
 }
+
+fn default_backend() -> String {
+    "sqlite".to_string()
+}
+
 
 fn default_true() -> bool {
     true
@@ -195,6 +234,7 @@ impl Default for MemoryConfig {
     fn default() -> Self {
         Self {
             enabled: true,
+            backend: default_backend(),
             qdrant_url: default_qdrant_url(),
             collection_name: default_collection_name(),
         }
@@ -289,6 +329,7 @@ impl Default for AgentConfig {
             openrouter_api_key: None,
             elevenlabs_api_key: None,
             mcp_servers: vec![],
+            diagnostics: DiagnosticsConfig::default(),
         }
     }
 }

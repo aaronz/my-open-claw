@@ -16,6 +16,9 @@ use std::path::PathBuf;
 struct Cli {
     #[command(subcommand)]
     command: Commands,
+    /// Run with minimal local dependencies (in-memory/sqlite memory, mock provider)
+    #[arg(long, global = true, short = 'l')]
+    local: bool,
     #[arg(long, global = true)]
     verbose: bool,
     #[arg(long, global = true)]
@@ -32,6 +35,7 @@ enum Commands {
     Dev(commands::gateway::GatewayArgs),
     Listen,
     Plugins(commands::plugins::PluginsArgs),
+    Logs(commands::logs::LogsArgs),
     #[command(subcommand)]
     Message(commands::message::MessageCommands),
 }
@@ -42,8 +46,20 @@ async fn main() -> Result<()> {
     let config_path = cli.config.unwrap_or_else(AppConfig::default_path);
     let mut config = AppConfig::load(&config_path).unwrap_or_default();
     
+    // Global flags override config
     if cli.verbose {
         config.gateway.verbose = true;
+    }
+    if cli.local {
+        config.memory.backend = "sqlite".to_string();
+        if config.models.providers.is_empty() {
+            config.models.providers.push(openclaw_core::config::ProviderConfig {
+                name: "mock".to_string(),
+                model: "test-model".to_string(),
+                api_key: Some("test-key".to_string()),
+                base_url: None,
+            });
+        }
     }
 
     match cli.command {

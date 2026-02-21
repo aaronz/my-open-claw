@@ -156,11 +156,23 @@ impl AppState {
     }
 
     pub fn effective_system_prompt(&self) -> Option<String> {
-        match (&self.config.agent.system_prompt, &self.workspace_prompt) {
-            (Some(sp), Some(wp)) => Some(format!("{sp}\n\n{wp}")),
-            (Some(sp), None) => Some(sp.clone()),
-            (None, Some(wp)) => Some(wp.clone()),
-            (None, None) => None,
+        let mut parts = Vec::new();
+
+        if let Some(sp) = &self.config.agent.system_prompt {
+            parts.push(sp.clone());
+        }
+
+        if let Some(wp) = &self.workspace_prompt {
+            parts.push(wp.clone());
+        }
+
+        let now = chrono::Local::now();
+        parts.push(format!("### Current Date & Time\nTime zone: {}\nLocal time: {}", now.format("%Z"), now.format("%Y-%m-%d %H:%M:%S")));
+
+        if parts.is_empty() {
+            None
+        } else {
+            Some(parts.join("\n\n"))
         }
     }
 

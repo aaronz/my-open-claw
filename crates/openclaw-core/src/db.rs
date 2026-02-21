@@ -146,4 +146,56 @@ impl DbStore {
         }
         Ok(msgs)
     }
+
+    pub async fn add_embedding(&self, text: &str, vector: Vec<f32>) -> Result<()> {
+        let id = Uuid::new_v4();
+        let now = chrono::Utc::now();
+        let vector_json = serde_json::to_string(&vector).unwrap();
+
+        sqlx::query(
+            "INSERT INTO embeddings (id, content, vector, created_at) VALUES (?, ?, ?, ?)"
+        )
+        .bind(id.to_string())
+        .bind(text)
+        .bind(vector_json)
+        .bind(now)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| crate::OpenClawError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
+
+        Ok(())
+    }
+
+    pub async fn search_embeddings(&self, query_vector: &[f32], limit: u64) -> Result<Vec<String>> {
+        use sqlx::Row;
+        let rows = sqlx::query("SELECT content, vector FROM embeddings")
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| crate::OpenClawError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
+
+        let mut scored_results: Vec<(f32, String)> = rows.iter().filter_map(|r| {
+            let content: String = r.get("content");
+            let vector_json: String = r.get("vector");
+            let vector: Vec<f32> = serde_json::from_str(&vector_json).ok()?;
+            
+            let similarity = cosine_similarity(query_vector, &vector);
+            Some((similarity, content))
+        }).collect();
+
+        scored_results.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        
+        Ok(scored_results.into_iter().take(limit as usize).map(|(_, content)| content).collect())
+    }
+}
+
+fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
+    let dot_product: f32 = a.iter().zip(b).map(|(x, y)| x * y).sum();
+    let norm_a: f32 = a.iter().map(|x| x.powi(2)).sum::<f32>().sqrt();
+    let norm_b: f32 = b.iter().map(|x| x.powi(2)).sum::<f32>().sqrt();
+    
+    if norm_a == 0.0 || norm_b == 0.0 {
+        0.0
+    } else {
+        dot_product / (norm_a * norm_b)
+    }
 }

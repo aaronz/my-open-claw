@@ -1,26 +1,111 @@
 use anyhow::Result;
-use fastembed::{EmbeddingModel, InitOptions, TextEmbedding};
 use openclaw_core::AppConfig;
-use qdrant_client::qdrant::{
-    CreateCollection, Distance, PointStruct, SearchPoints, VectorParams, VectorsConfig, Value,
-};
-use qdrant_client::{Payload, Qdrant};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use uuid::Uuid;
 
 enum MemoryBackend {
-    Qdrant {
-        client: Arc<Qdrant>,
-        collection_name: String,
-    },
-    LanceDb {
-        table: Arc<lancedb::Table>,
-    },
     InMemory {
         data: Arc<Mutex<Vec<(String, serde_json::Value)>>>,
     },
 }
+
+#[derive(Clone)]
+pub struct MemoryService {
+    backend: Arc<MemoryBackend>,
+}
+
+impl MemoryService {
+    pub async fn new(_config: &AppConfig) -> Result<Self> {
+        Ok(Self {
+            backend: Arc::new(MemoryBackend::InMemory {
+                data: Arc::new(Mutex::new(Vec::new())),
+            }),
+        })
+    }
+
+    pub async fn add_memory(&self, text: &str, metadata: serde_json::Value) -> Result<()> {
+        if let MemoryBackend::InMemory { data } = &*self.backend {
+            let mut guard = data.lock().await;
+            guard.push((text.to_string(), metadata));
+        }
+        Ok(())
+    }
+
+    pub async fn search_memory(&self, query: &str, limit: u64) -> Result<Vec<String>> {
+        if let MemoryBackend::InMemory { data } = &*self.backend {
+            let guard = data.lock().await;
+            let results: Vec<String> = guard.iter()
+                .filter(|(text, _)| text.to_lowercase().contains(&query.to_lowercase()))
+                .map(|(text, _)| text.clone())
+                .take(limit as usize)
+                .collect();
+            return Ok(results);
+        }
+        Ok(vec![])
+    }
+}
+
+
+#[derive(Clone)]
+pub struct MemoryService {
+    backend: Arc<MemoryBackend>,
+    embedding: Option<Arc<Mutex<TextEmbedding>>>,
+}
+
+impl MemoryService {
+    pub async fn new(config: &AppConfig) -> Result<Self> {
+        let embedding = match TextEmbedding::try_new(
+            InitOptions::new(EmbeddingModel::AllMiniLML6V2).with_show_download_progress(false),
+        ) {
+            Ok(model) => Some(Arc::new(Mutex::new(model))),
+            Err(e) => {
+                tracing::warn!("Failed to init embedding model: {}. Memory will be restricted.", e);
+                None
+            }
+        };
+
+        if config.memory.qdrant_url == "in-memory" || config.memory.qdrant_url.is_empty() {
+             return Ok(Self {
+                backend: Arc::new(MemoryBackend::InMemory {
+                    data: Arc::new(Mutex::new(Vec::new())),
+                }),
+                embedding,
+            });
+        }
+
+        match Qdrant::from_url(&config.memory.qdrant_url).build() {
+            Ok(client) => {
+                let service = Self {
+                    backend: Arc::new(MemoryBackend::Qdrant {
+                        client: Arc::new(client),
+                        collection_name: config.memory.collection_name.clone(),
+                    }),
+                    embedding,
+                };
+                if let Err(e) = service.init_collection().await {
+                    tracing::warn!("Failed to init Qdrant: {}. Falling back to in-memory.", e);
+                    return Ok(Self {
+                        backend: Arc::new(MemoryBackend::InMemory {
+                            data: Arc::new(Mutex::new(Vec::new())),
+                        }),
+                        embedding: service.embedding,
+                    });
+                }
+                Ok(service)
+            }
+            Err(e) => {
+                tracing::warn!("Invalid Qdrant URL {}: {}. Falling back to in-memory.", config.memory.qdrant_url, e);
+                Ok(Self {
+                    backend: Arc::new(MemoryBackend::InMemory {
+                        data: Arc::new(Mutex::new(Vec::new())),
+                    }),
+                    embedding,
+                })
+            }
+        }
+    }
+}
+
 
 #[derive(Clone)]
 pub struct MemoryService {

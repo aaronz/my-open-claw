@@ -18,9 +18,7 @@ directories = { workspace = true }
 dashmap = { workspace = true }
 tokio = { workspace = true }
 sqlx = { workspace = true }
-lancedb = { workspace = true }
-arrow = { workspace = true }
-arrow-array = { workspace = true }
+opentelemetry = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

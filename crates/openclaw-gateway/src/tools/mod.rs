@@ -8,6 +8,7 @@ pub mod perplexity;
 pub mod openrouter;
 pub mod python;
 pub mod search;
+pub mod session_status;
 pub mod shell;
 pub mod weather;
 pub mod youtube;
@@ -38,6 +39,9 @@ pub fn default_tools(config: &AppConfig, cron: Arc<CronScheduler>, state: Arc<Ap
 
     let youtube = youtube::YouTubeTool::new();
     tools.insert(youtube.definition().name, Box::new(youtube));
+
+    let status_tool = session_status::SessionStatusTool::new(state.clone());
+    tools.insert(status_tool.definition().name, Box::new(status_tool));
 
     let cron_tool = cron::CronTool::new(cron);
     tools.insert(cron_tool.definition().name, Box::new(cron_tool));

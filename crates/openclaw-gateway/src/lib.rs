@@ -30,17 +30,52 @@ use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 use tracing::info;
+use opentelemetry::global;
+use opentelemetry_otlp::WithExportConfig;
+use opentelemetry_sdk::trace as sdktrace;
+use opentelemetry_sdk::Resource;
+use opentelemetry::KeyValue;
 
-pub async fn start_gateway(config: AppConfig) -> openclaw_core::Result<()> {
-    if config.gateway.verbose {
+pub fn init_telemetry(config: &AppConfig) {
+    if config.diagnostics.otel.enabled {
+        let exporter = opentelemetry_otlp::new_exporter()
+            .http()
+            .with_endpoint(&config.diagnostics.otel.endpoint);
+        
+        let tracer = opentelemetry_otlp::new_pipeline()
+            .tracing()
+            .with_exporter(exporter)
+            .with_trace_config(
+                sdktrace::config().with_resource(Resource::new(vec![KeyValue::new(
+                    "service.name",
+                    "openclaw-gateway",
+                )])),
+            )
+            .install_batch(opentelemetry_sdk::runtime::Tokio)
+            .expect("Failed to initialize OTLP tracer");
+
+        let telemetry_layer = tracing_opentelemetry::layer().with_tracer(tracer);
+        
+        let subscriber = tracing_subscriber::Registry::default().with(telemetry_layer);
+        tracing::subscriber::set_global_default(subscriber).expect("Failed to set subscriber");
+
+    } else if config.gateway.verbose {
         tracing_subscriber::fmt()
             .with_env_filter("openclaw=debug,tower_http=debug")
+            .with_ansi(true)
             .init();
     } else {
         tracing_subscriber::fmt()
             .with_env_filter("openclaw=info")
+            .with_ansi(true)
             .init();
     }
+}
+
+pub async fn start_gateway(config: AppConfig) -> openclaw_core::Result<()> {
+    init_telemetry(&config);
+
+    info!("Logging to /tmp/openclaw/");
 
     let port = config.gateway.port;
     let bind_addr = match config.gateway.bind {

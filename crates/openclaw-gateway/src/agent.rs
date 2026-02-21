@@ -98,7 +98,7 @@ pub async fn run_agent_cycle(state: Arc<AppState>, session_id: Uuid) {
                     if let Ok(results) = memory.search_memory(&last_msg.content, 3).await {
                         if !results.is_empty() {
                             let context = results.join("\n---\n");
-                            let memory_block = format!("\n\nRELEVANT MEMORIES:\n{}\n", context);
+                            let memory_block = format!("\n\n### Relevant Memories\n{}", context);
                             system_prompt = Some(format!("{}{}", system_prompt.unwrap_or_default(), memory_block));
                         }
                     }
