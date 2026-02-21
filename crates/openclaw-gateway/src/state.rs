@@ -8,6 +8,7 @@ use tokio::sync::broadcast;
 use uuid::Uuid;
 
 use crate::auth::oauth::OAuthManager;
+use crate::auth::pairing::PairingManager;
 use crate::cron::CronScheduler;
 use crate::mcp::McpManager;
 use crate::memory::service::MemoryService;
@@ -32,6 +33,7 @@ pub struct AppState {
     pub skills: SkillRegistry,
     pub oauth: Arc<OAuthManager>,
     pub mcp: Arc<McpManager>,
+    pub pairing: Arc<PairingManager>,
 }
 
 impl AppState {
@@ -78,7 +80,8 @@ impl AppState {
             config.agent.obsidian_path.clone(), 
             config.agent.notion_token.clone(),
             config.agent.google_token.clone(),
-            config.agent.linear_token.clone()
+            config.agent.linear_token.clone(),
+            config.agent.todoist_token.clone()
         );
         if let Some(ref mem) = memory_ref {
             skills.register(Box::new(crate::skills::MemorySkill::new(Some(Arc::new(mem.clone())))));
@@ -100,16 +103,8 @@ impl AppState {
             skills,
             oauth: Arc::new(OAuthManager::new()),
             mcp: Arc::new(McpManager::new()),
+            pairing: Arc::new(PairingManager::new()),
         });
-
-        for server in &config.agent.mcp_servers {
-            let mcp = state.mcp.clone();
-            let cmd = server.command.clone();
-            let args = server.args.clone();
-            tokio::spawn(async move {
-                let _ = mcp.add_server(cmd, args).await;
-            });
-        }
 
         let tools = default_tools(&config, cron.clone(), state.clone());
         for (name, tool) in tools {
@@ -129,7 +124,8 @@ impl AppState {
             config.agent.obsidian_path.clone(), 
             config.agent.notion_token.clone(),
             config.agent.google_token.clone(),
-            config.agent.linear_token.clone()
+            config.agent.linear_token.clone(),
+            config.agent.todoist_token.clone()
         );
 
         let state = Arc::new(Self {
@@ -148,6 +144,7 @@ impl AppState {
             skills,
             oauth: Arc::new(OAuthManager::new()),
             mcp: Arc::new(McpManager::new()),
+            pairing: Arc::new(PairingManager::new()),
         });
 
         let tools = default_tools(&config, cron.clone(), state.clone());

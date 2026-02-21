@@ -106,6 +106,7 @@ pub struct AgentConfig {
     pub notion_token: Option<String>,
     pub google_token: Option<String>,
     pub linear_token: Option<String>,
+    pub todoist_token: Option<String>,
     #[serde(default)]
     pub mcp_servers: Vec<McpServerConfig>,
 }
@@ -278,6 +279,7 @@ impl Default for AgentConfig {
             notion_token: None,
             google_token: None,
             linear_token: None,
+            todoist_token: None,
             mcp_servers: vec![],
         }
     }

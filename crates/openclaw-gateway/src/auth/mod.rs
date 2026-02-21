@@ -1,4 +1,5 @@
 pub mod oauth;
+pub mod pairing;
 
 use axum::extract::{Query, State};
 use axum::response::IntoResponse;
@@ -29,8 +30,8 @@ pub async fn oauth_callback(
 
 pub async fn auth_middleware(
     _state: State<Arc<AppState>>,
-    _req: axum::extract::Request,
-    _next: axum::middleware::Next,
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
 ) -> impl IntoResponse {
-    _next.run(_req).await
+    next.run(req).await
 }
