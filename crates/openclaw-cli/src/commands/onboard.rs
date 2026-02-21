@@ -40,8 +40,29 @@ pub async fn run(args: OnboardArgs) -> anyhow::Result<()> {
         .default(18789)
         .interact_text()?;
 
+    let enable_mcp = Select::new()
+        .with_prompt("Enable Model Context Protocol (MCP) servers?")
+        .items(&["No", "Yes (Enable Brave Search & Postgres presets)"])
+        .default(0)
+        .interact()?;
+
     let mut config = AppConfig::default();
     config.gateway.port = port;
+
+    if enable_mcp == 1 {
+        config.agent.mcp_servers = vec![
+            openclaw_core::config::McpServerConfig {
+                name: "brave-search".to_string(),
+                command: "npx".to_string(),
+                args: vec!["-y".to_string(), "@modelcontextprotocol/server-brave-search".to_string()],
+            },
+            openclaw_core::config::McpServerConfig {
+                name: "postgres".to_string(),
+                command: "npx".to_string(),
+                args: vec!["-y".to_string(), "@modelcontextprotocol/server-postgres".to_string()],
+            },
+        ];
+    }
     config.models = ModelsConfig {
         default_model: model.clone(),
         providers: vec![ProviderConfig {

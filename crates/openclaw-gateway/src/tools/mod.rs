@@ -4,6 +4,7 @@ pub mod cron;
 pub mod fs;
 pub mod python;
 pub mod search;
+pub mod shell;
 pub mod weather;
 pub mod youtube;
 
@@ -36,6 +37,9 @@ pub fn default_tools(config: &AppConfig, cron: Arc<CronScheduler>, state: Arc<Ap
 
     let cron_tool = cron::CronTool::new(cron);
     tools.insert(cron_tool.definition().name, Box::new(cron_tool));
+
+    let shell = shell::ShellTool;
+    tools.insert(shell.definition().name, Box::new(shell));
 
     if let Some(key) = &config.agent.tavily_api_key {
         let search = search::SearchTool::new(key.clone());
