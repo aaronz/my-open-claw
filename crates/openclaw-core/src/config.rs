@@ -115,6 +115,8 @@ pub struct AgentConfig {
     pub mcp_servers: Vec<McpServerConfig>,
     #[serde(default)]
     pub diagnostics: DiagnosticsConfig,
+    #[serde(default)]
+    pub network: NetworkConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -137,13 +139,23 @@ fn default_otel_endpoint() -> String {
     "http://localhost:4318".to_string()
 }
 
-impl Default for OtelConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            endpoint: default_otel_endpoint(),
-        }
-    }
+pub struct DiagnosticsConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub otel: OtelConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct OtelConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_otel_endpoint")]
+    pub endpoint: String,
+}
+
+fn default_otel_endpoint() -> String {
+    "http://localhost:4318".to_string()
 }
 
 
@@ -330,6 +342,7 @@ impl Default for AgentConfig {
             elevenlabs_api_key: None,
             mcp_servers: vec![],
             diagnostics: DiagnosticsConfig::default(),
+            network: NetworkConfig::default(),
         }
     }
 }

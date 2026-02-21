@@ -4,6 +4,7 @@ pub mod channels;
 pub mod cron;
 pub mod mcp;
 pub mod memory;
+pub mod network;
 pub mod provider;
 pub mod routes;
 pub mod skills;
@@ -85,6 +86,9 @@ pub async fn start_gateway(config: AppConfig) -> openclaw_core::Result<()> {
 
     let needs_auth = !matches!(config.gateway.auth.mode, AuthMode::None);
     let state = AppState::new(config).await;
+
+    // Start network services
+    tokio::spawn(network::init_tailscale(state.clone()));
 
     // Start Cron Scheduler
     state.cron.clone().start(state.clone());
