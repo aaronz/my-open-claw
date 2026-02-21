@@ -77,7 +77,8 @@ impl AppState {
             config.agent.github_token.clone(), 
             config.agent.obsidian_path.clone(), 
             config.agent.notion_token.clone(),
-            config.agent.google_token.clone()
+            config.agent.google_token.clone(),
+            config.agent.linear_token.clone()
         );
         if let Some(ref mem) = memory_ref {
             skills.register(Box::new(crate::skills::MemorySkill::new(Some(Arc::new(mem.clone())))));
@@ -127,7 +128,8 @@ impl AppState {
             config.agent.github_token.clone(), 
             config.agent.obsidian_path.clone(), 
             config.agent.notion_token.clone(),
-            config.agent.google_token.clone()
+            config.agent.google_token.clone(),
+            config.agent.linear_token.clone()
         );
 
         let state = Arc::new(Self {

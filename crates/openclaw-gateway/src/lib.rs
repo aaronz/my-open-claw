@@ -15,6 +15,7 @@ pub mod ws;
 use crate::channels::bluebubbles::BlueBubblesChannel;
 use crate::channels::discord::DiscordChannel;
 use crate::channels::matrix::MatrixChannel;
+use crate::channels::mattermost::MattermostChannel;
 use crate::channels::signal::SignalChannel;
 use crate::channels::slack::SlackChannel;
 use crate::channels::telegram::TelegramChannel;
@@ -180,11 +181,11 @@ pub async fn start_gateway(config: AppConfig) -> openclaw_core::Result<()> {
         }
     }
 
-    if let Some(bluebubbles_config) = &state.config.channels.whatsapp {
-        if bluebubbles_config.enabled {
-             if let (Some(url), Some(pass)) = (&bluebubbles_config.token, &bluebubbles_config.app_token) {
-                let channel = BlueBubblesChannel::new(url.clone(), pass.clone(), Arc::downgrade(&state));
-                info!("BlueBubbles channel started");
+    if let Some(mm_config) = &state.config.channels.slack {
+        if mm_config.enabled && mm_config.dm_policy == openclaw_core::config::DmPolicy::Open {
+             if let (Some(url), Some(token)) = (&mm_config.token, &mm_config.app_token) {
+                let channel = MattermostChannel::new(url.clone(), token.clone(), Arc::downgrade(&state));
+                info!("Mattermost channel started");
                 state.channels.insert(ChannelKind::Api, Arc::new(channel));
              }
         }

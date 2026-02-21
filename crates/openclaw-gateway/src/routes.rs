@@ -21,6 +21,7 @@ pub fn api_router() -> Router<Arc<AppState>> {
         .route("/api/webhook/whatsapp", post(whatsapp_webhook))
         .route("/api/webhook/signal", post(signal_webhook))
         .route("/api/webhook/matrix", post(matrix_webhook))
+        .route("/api/webhook/mattermost", post(mattermost_webhook))
         .route("/api/webhook/bluebubbles", post(bluebubbles_webhook))
         .route("/api/memory", post(ingest_memory))
 }
@@ -30,6 +31,14 @@ async fn bluebubbles_webhook(
     Json(body): Json<Value>,
 ) -> impl axum::response::IntoResponse {
     let _ = crate::channels::bluebubbles::handle_bluebubbles_webhook(state, body).await;
+    axum::http::StatusCode::OK
+}
+
+async fn mattermost_webhook(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<Value>,
+) -> impl axum::response::IntoResponse {
+    let _ = crate::channels::mattermost::handle_mattermost_webhook(state, body).await;
     axum::http::StatusCode::OK
 }
 

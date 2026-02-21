@@ -85,7 +85,7 @@ pub struct ChannelInstanceConfig {
     pub allow_from: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum DmPolicy {
     #[default]
@@ -105,6 +105,7 @@ pub struct AgentConfig {
     pub obsidian_path: Option<String>,
     pub notion_token: Option<String>,
     pub google_token: Option<String>,
+    pub linear_token: Option<String>,
     #[serde(default)]
     pub mcp_servers: Vec<McpServerConfig>,
 }
@@ -276,6 +277,7 @@ impl Default for AgentConfig {
             obsidian_path: None,
             notion_token: None,
             google_token: None,
+            linear_token: None,
             mcp_servers: vec![],
         }
     }

@@ -6,7 +6,7 @@ pub fn load_prompt_files(workspace_path: &str) -> Option<String> {
         return None;
     }
 
-    let prompt_files = ["AGENTS.md", "SOUL.md", "TOOLS.md"];
+    let prompt_files = ["AGENTS.md", "SOUL.md", "TOOLS.md", "CORE.prose", "AGENT.prose"];
     let mut parts = Vec::new();
 
     for filename in &prompt_files {
@@ -14,7 +14,12 @@ pub fn load_prompt_files(workspace_path: &str) -> Option<String> {
         if path.exists() {
             if let Ok(content) = std::fs::read_to_string(&path) {
                 if !content.trim().is_empty() {
-                    parts.push(content);
+                    let formatted = if filename.ends_with(".prose") {
+                        format!("### PROSE: {}\n{}", filename, content)
+                    } else {
+                        content
+                    };
+                    parts.push(formatted);
                 }
             }
         }

@@ -101,6 +101,8 @@ pub mod node;
 pub mod docker;
 pub mod google_calendar;
 pub mod apple_reminders;
+pub mod linear;
+pub mod google_sheets;
 
 pub use github::GitHubSkill;
 pub use slack::SlackSkill;
@@ -116,8 +118,10 @@ pub use node::NodeSkill;
 pub use docker::DockerSkill;
 pub use google_calendar::GoogleCalendarSkill;
 pub use apple_reminders::AppleRemindersSkill;
+pub use linear::LinearSkill;
+pub use google_sheets::GoogleSheetsSkill;
 
-pub fn default_skills(github_token: Option<String>, obsidian_path: Option<String>, notion_token: Option<String>, google_token: Option<String>) -> SkillRegistry {
+pub fn default_skills(github_token: Option<String>, obsidian_path: Option<String>, notion_token: Option<String>, google_token: Option<String>, linear_token: Option<String>) -> SkillRegistry {
     let mut registry = SkillRegistry::new();
     
     registry.register(Box::new(WeatherSkill));
@@ -128,8 +132,10 @@ pub fn default_skills(github_token: Option<String>, obsidian_path: Option<String
     registry.register(Box::new(SpotifySkill));
     registry.register(Box::new(ObsidianSkill::new(obsidian_path)));
     registry.register(Box::new(NotionSkill::new(notion_token)));
-    registry.register(Box::new(GoogleCalendarSkill::new(google_token)));
+    registry.register(Box::new(GoogleCalendarSkill::new(google_token.clone())));
     registry.register(Box::new(AppleRemindersSkill));
+    registry.register(Box::new(LinearSkill::new(linear_token)));
+    registry.register(Box::new(GoogleSheetsSkill::new(google_token)));
     registry.register(Box::new(OnePasswordSkill));
     registry.register(Box::new(NodeSkill));
     registry.register(Box::new(DockerSkill));
