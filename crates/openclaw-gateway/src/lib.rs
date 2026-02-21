@@ -16,6 +16,7 @@ use crate::channels::discord::DiscordChannel;
 use crate::channels::slack::SlackChannel;
 use crate::channels::telegram::TelegramChannel;
 use crate::channels::whatsapp::WhatsAppChannel;
+use crate::channels::signal::SignalChannel;
 use axum::middleware;
 use axum::routing::get;
 use axum::Router;
@@ -125,10 +126,29 @@ pub async fn start_gateway(config: AppConfig) -> openclaw_core::Result<()> {
                 match channel.start().await {
                     Ok(_) => {
                         info!("WhatsApp channel started");
-                        state.channels.insert(ChannelKind::WhatsApp, Arc::new(channel));
+                        state
+                            .channels
+                            .insert(ChannelKind::WhatsApp, Arc::new(channel));
                     }
                     Err(e) => {
                         tracing::error!("Failed to start WhatsApp channel: {}", e);
+                    }
+                }
+            }
+        }
+    }
+
+    if let Some(signal_config) = &state.config.channels.signal {
+        if signal_config.enabled {
+            if let Some(url) = &signal_config.token {
+                let channel = SignalChannel::new(url.clone(), Arc::downgrade(&state));
+                match channel.start().await {
+                    Ok(_) => {
+                        info!("Signal channel started");
+                        state.channels.insert(ChannelKind::Signal, Arc::new(channel));
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to start Signal channel: {}", e);
                     }
                 }
             }

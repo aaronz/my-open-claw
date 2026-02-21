@@ -60,7 +60,7 @@ impl Provider for GeminiProvider {
                 Role::Tool => "user",
             };
 
-            let parts = if !m.tool_calls.is_empty() {
+            let mut parts = if !m.tool_calls.is_empty() {
                 m.tool_calls
                     .iter()
                     .map(|tc| {
@@ -82,6 +82,17 @@ impl Provider for GeminiProvider {
             } else {
                 vec![json!({ "text": m.content })]
             };
+
+            if m.role == Role::User && !m.images.is_empty() {
+                for img in &m.images {
+                    parts.push(json!({
+                        "inlineData": {
+                            "mimeType": "image/jpeg",
+                            "data": img
+                        }
+                    }));
+                }
+            }
 
             contents.push(json!({
                 "role": role,

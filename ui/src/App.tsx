@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Send, User, Bot, Loader2, Maximize2, Layout } from 'lucide-react';
 
 interface Message {
+  id?: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
 }
@@ -11,6 +12,7 @@ function App() {
   const [input, setInput] = useState('');
   const [thinking, setThinking] = useState(false);
   const [canvas, setCanvas] = useState<{title?: string, content: string, language?: string} | null>(null);
+  const [toolStatus, setToolStatus] = useState<string | null>(null);
   const ws = useRef<WebSocket | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -23,8 +25,10 @@ function App() {
       const msg = JSON.parse(event.data);
       if (msg.type === 'agent_thinking') {
         setThinking(true);
+        setToolStatus(null);
       } else if (msg.type === 'agent_response') {
         setThinking(false);
+        setToolStatus(null);
         setMessages(prev => {
           const last = prev[prev.length - 1];
           if (last && last.role === 'assistant') {
@@ -34,6 +38,10 @@ function App() {
         });
       } else if (msg.type === 'canvas_update') {
         setCanvas({ title: msg.title, content: msg.content, language: msg.language });
+      } else if (msg.type === 'new_message') {
+        if (msg.message.role === 'assistant' || msg.message.role === 'system') {
+           setMessages(prev => [...prev, msg.message]);
+        }
       }
     };
 
@@ -66,9 +74,11 @@ function App() {
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {messages.map((m, i) => (
-            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : (m.role === 'system' ? 'justify-center' : 'justify-start')}`}>
               <div className={`max-w-[85%] rounded-2xl px-4 py-2 ${
-                m.role === 'user' ? 'bg-blue-600 text-white rounded-br-none' : 'bg-gray-100 text-gray-800 rounded-bl-none'
+                m.role === 'user' 
+                  ? 'bg-blue-600 text-white rounded-br-none' 
+                  : (m.role === 'system' ? 'bg-amber-50 text-amber-700 text-xs font-medium uppercase tracking-wider rounded-lg border border-amber-100' : 'bg-gray-100 text-gray-800 rounded-bl-none')
               }`}>
                 {m.content}
               </div>
@@ -76,9 +86,16 @@ function App() {
           ))}
           {thinking && (
             <div className="flex justify-start">
-              <div className="bg-gray-100 text-gray-400 rounded-2xl px-4 py-2 flex items-center gap-2 italic text-sm">
-                <Loader2 className="w-3 h-3 animate-spin" />
-                Thinking...
+              <div className="bg-gray-100 text-gray-400 rounded-2xl px-4 py-2 flex flex-col gap-2 italic text-sm">
+                <div className="flex items-center gap-2">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  {toolStatus || 'OpenClaw is thinking...'}
+                </div>
+                <div className="flex gap-0.5 h-3 items-center">
+                  {[1,2,3,4,5].map(i => (
+                    <div key={i} className="w-1 bg-blue-400 rounded-full animate-pulse" style={{ height: `${20 + Math.random() * 80}%`, animationDelay: `${i * 0.1}s` }} />
+                  ))}
+                </div>
               </div>
             </div>
           )}

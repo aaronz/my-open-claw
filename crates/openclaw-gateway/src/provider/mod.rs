@@ -22,10 +22,39 @@ pub fn create_provider(config: &ProviderConfig) -> Option<Arc<dyn Provider>> {
             api_key.clone(),
             config.model.clone(),
         ))),
+        "mock" | "test" => Some(Arc::new(MockProvider)),
         _ => {
             tracing::warn!("unknown provider: {}", config.name);
             None
         }
+    }
+}
+
+pub struct MockProvider;
+
+#[async_trait::async_trait]
+impl openclaw_core::provider::Provider for MockProvider {
+    fn name(&self) -> &str {
+        "mock"
+    }
+
+    async fn stream_chat(
+        &self,
+        _messages: &[openclaw_core::session::ChatMessage],
+        _system_prompt: Option<&str>,
+        _model: &str,
+        _max_tokens: Option<u32>,
+        _temperature: Option<f32>,
+        _tools: Option<&[openclaw_core::provider::ToolDefinition]>,
+        token_tx: tokio::sync::mpsc::Sender<String>,
+    ) -> openclaw_core::error::Result<openclaw_core::provider::CompletionResponse> {
+        let content = "This is a mock response from the OpenClaw test provider. I am running in minimal dependency mode.";
+        let _ = token_tx.send(content.to_string()).await;
+        
+        Ok(openclaw_core::provider::CompletionResponse {
+            content: content.to_string(),
+            tool_calls: vec![],
+        })
     }
 }
 

@@ -52,9 +52,23 @@ impl Provider for OpenAiProvider {
         for m in messages {
             match m.role {
                 Role::User => {
+                    let mut content = vec![json!({
+                        "type": "text",
+                        "text": m.content,
+                    })];
+
+                    for img in &m.images {
+                        content.push(json!({
+                            "type": "image_url",
+                            "image_url": {
+                                "url": format!("data:image/jpeg;base64,{}", img),
+                            }
+                        }));
+                    }
+
                     api_messages.push(json!({
                         "role": "user",
-                        "content": m.content,
+                        "content": content,
                     }));
                 }
                 Role::Assistant => {

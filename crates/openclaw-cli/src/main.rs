@@ -28,6 +28,7 @@ enum Commands {
     Ingest(commands::ingest::IngestArgs),
     Doctor(commands::doctor::DoctorArgs),
     Agent(commands::agent::AgentArgs),
+    Dev(commands::gateway::GatewayArgs),
     #[command(subcommand)]
     Message(commands::message::MessageCommands),
 }
@@ -48,6 +49,17 @@ async fn main() -> Result<()> {
         Commands::Ingest(args) => commands::ingest::run(args, config).await,
         Commands::Doctor(args) => commands::doctor::run(args, config).await,
         Commands::Agent(args) => commands::agent::run(args, config).await,
+        Commands::Dev(args) => {
+            config.models.providers = vec![openclaw_core::config::ProviderConfig {
+                name: "mock".to_string(),
+                model: "test-model".to_string(),
+                api_key: Some("test-key".to_string()),
+                base_url: None,
+            }];
+            config.memory.qdrant_url = "in-memory".to_string();
+            config.gateway.verbose = true;
+            commands::gateway::run(args, config).await
+        }
         Commands::Message(sub) => match sub {
             commands::message::MessageCommands::Send(args) => {
                 commands::message::run_send(args, config).await

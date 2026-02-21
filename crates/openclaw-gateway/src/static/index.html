@@ -88,6 +88,8 @@
                 if (msg.done) {
                     currentResponse = null;
                 }
+            } else if (msg.type === 'presence_update') {
+                console.log("Presence update:", msg);
             } else if (msg.type === 'canvas_update') {
                 showCanvas(msg);
             } else if (msg.type === 'error') {

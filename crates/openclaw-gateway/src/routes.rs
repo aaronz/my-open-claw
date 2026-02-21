@@ -18,7 +18,25 @@ pub fn api_router() -> Router<Arc<AppState>> {
         .route("/api/config", get(get_config))
         .route("/api/status", get(status))
         .route("/api/webhook", post(webhook))
+        .route("/api/webhook/whatsapp", post(whatsapp_webhook))
+        .route("/api/webhook/signal", post(signal_webhook))
         .route("/api/memory", post(ingest_memory))
+}
+
+async fn whatsapp_webhook(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<Value>,
+) -> impl axum::response::IntoResponse {
+    let _ = crate::channels::whatsapp::handle_whatsapp_webhook(state, body).await;
+    axum::http::StatusCode::OK
+}
+
+async fn signal_webhook(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<Value>,
+) -> impl axum::response::IntoResponse {
+    let _ = crate::channels::signal::handle_signal_webhook(state, body).await;
+    axum::http::StatusCode::OK
 }
 
 async fn index_html() -> impl axum::response::IntoResponse {

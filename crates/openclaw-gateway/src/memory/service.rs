@@ -9,131 +9,172 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
+enum MemoryBackend {
+    Qdrant {
+        client: Arc<QdrantClient>,
+        collection_name: String,
+    },
+    InMemory {
+        data: Arc<Mutex<Vec<(String, serde_json::Value)>>>,
+    },
+}
+
 #[derive(Clone)]
 pub struct MemoryService {
-    qdrant: Arc<QdrantClient>,
-    embedding: Arc<Mutex<TextEmbedding>>,
-    collection_name: String,
+    backend: Arc<MemoryBackend>,
+    embedding: Option<Arc<Mutex<TextEmbedding>>>,
 }
 
 impl MemoryService {
     pub async fn new(config: &AppConfig) -> Result<Self> {
-        let qdrant = QdrantClient::from_url(&config.memory.qdrant_url).build()?;
-
-        let model = TextEmbedding::try_new(
-            InitOptions::new(EmbeddingModel::AllMiniLML6V2).with_show_download_progress(true),
-        )?;
-
-        let service = Self {
-            qdrant: Arc::new(qdrant),
-            embedding: Arc::new(Mutex::new(model)),
-            collection_name: config.memory.collection_name.clone(),
+        let embedding = match TextEmbedding::try_new(
+            InitOptions::new(EmbeddingModel::AllMiniLML6V2).with_show_download_progress(false),
+        ) {
+            Ok(model) => Some(Arc::new(Mutex::new(model))),
+            Err(e) => {
+                tracing::warn!("Failed to init embedding model: {}. Memory will be restricted.", e);
+                None
+            }
         };
 
-        service.init_collection().await?;
-        Ok(service)
+        if config.memory.qdrant_url == "in-memory" || config.memory.qdrant_url.is_empty() {
+             return Ok(Self {
+                backend: Arc::new(MemoryBackend::InMemory {
+                    data: Arc::new(Mutex::new(Vec::new())),
+                }),
+                embedding,
+            });
+        }
+
+        match QdrantClient::from_url(&config.memory.qdrant_url).build() {
+            Ok(client) => {
+                let service = Self {
+                    backend: Arc::new(MemoryBackend::Qdrant {
+                        client: Arc::new(client),
+                        collection_name: config.memory.collection_name.clone(),
+                    }),
+                    embedding,
+                };
+                if let Err(e) = service.init_collection().await {
+                    tracing::warn!("Failed to init Qdrant: {}. Falling back to in-memory.", e);
+                    return Ok(Self {
+                        backend: Arc::new(MemoryBackend::InMemory {
+                            data: Arc::new(Mutex::new(Vec::new())),
+                        }),
+                        embedding: service.embedding,
+                    });
+                }
+                Ok(service)
+            }
+            Err(e) => {
+                tracing::warn!("Invalid Qdrant URL {}: {}. Falling back to in-memory.", config.memory.qdrant_url, e);
+                Ok(Self {
+                    backend: Arc::new(MemoryBackend::InMemory {
+                        data: Arc::new(Mutex::new(Vec::new())),
+                    }),
+                    embedding,
+                })
+            }
+        }
     }
 
     async fn init_collection(&self) -> Result<()> {
-        if !self.qdrant.collection_exists(&self.collection_name).await? {
-            self
-                .qdrant
-                .create_collection(&CreateCollection {
-                    collection_name: self.collection_name.clone(),
-                    vectors_config: Some(VectorsConfig {
-                        config: Some(qdrant_client::qdrant::vectors_config::Config::Params(
-                            VectorParams {
-                                size: 384,
-                                distance: Distance::Cosine.into(),
-                                ..Default::default()
-                            },
-                        )),
-                    }),
-                    ..Default::default()
-                })
-                .await?;
+        if let MemoryBackend::Qdrant { client, collection_name } = &*self.backend {
+            if !client.collection_exists(collection_name).await? {
+                client
+                    .create_collection(&CreateCollection {
+                        collection_name: collection_name.clone(),
+                        vectors_config: Some(VectorsConfig {
+                            config: Some(qdrant_client::qdrant::vectors_config::Config::Params(
+                                VectorParams {
+                                    size: 384,
+                                    distance: Distance::Cosine.into(),
+                                    ..Default::default()
+                                },
+                            )),
+                        }),
+                        ..Default::default()
+                    })
+                    .await?;
+            }
         }
         Ok(())
     }
 
     pub async fn add_memory(&self, text: &str, metadata: serde_json::Value) -> Result<()> {
-        let embedding = {
-            let model = self.embedding.lock().await;
-            let embeddings = model.embed(vec![text], None)?;
-            embeddings[0].clone()
-        };
+        match &*self.backend {
+            MemoryBackend::Qdrant { client, collection_name } => {
+                let embedding = if let Some(model_lock) = &self.embedding {
+                    let model = model_lock.lock().await;
+                    model.embed(vec![text], None)?[0].clone()
+                } else {
+                    return Ok(());
+                };
 
-        let mut payload = Payload::new();
-        // Flatten metadata into payload
-        if let serde_json::Value::Object(map) = metadata {
-            for (k, v) in map {
-                payload.insert(k, v);
+                let mut payload = Payload::new();
+                if let serde_json::Value::Object(map) = metadata {
+                    for (k, v) in map {
+                        payload.insert(k, v);
+                    }
+                }
+                payload.insert("text", text.to_string());
+
+                let point = PointStruct::new(
+                    Uuid::new_v4().to_string(),
+                    embedding,
+                    payload,
+                );
+
+                client.upsert_points(collection_name.clone(), None, vec![point], None).await?;
+            }
+            MemoryBackend::InMemory { data } => {
+                let mut guard = data.lock().await;
+                guard.push((text.to_string(), metadata));
             }
         }
-        payload.insert("text", text.to_string());
-
-        let point = PointStruct::new(
-            Uuid::new_v4().to_string(),
-            embedding,
-            payload,
-        );
-
-        self
-            .qdrant
-            .upsert_points(self.collection_name.clone(), None, vec![point], None)
-            .await?;
-
         Ok(())
     }
 
     pub async fn search_memory(&self, query: &str, limit: u64) -> Result<Vec<String>> {
-        let embedding = {
-            let model = self.embedding.lock().await;
-            let embeddings = model.embed(vec![query], None)?;
-            embeddings[0].clone()
-        };
+        match &*self.backend {
+            MemoryBackend::Qdrant { client, collection_name } => {
+                let embedding = if let Some(model_lock) = &self.embedding {
+                    let model = model_lock.lock().await;
+                    model.embed(vec![query], None)?[0].clone()
+                } else {
+                    return Ok(vec![]);
+                };
 
-        let search_result = self
-            .qdrant
-            .search_points(&SearchPoints {
-                collection_name: self.collection_name.clone(),
-                vector: embedding,
-                limit,
-                with_payload: Some(true.into()),
-                ..Default::default()
-            })
-            .await?;
+                let search_result = client
+                    .search_points(&SearchPoints {
+                        collection_name: collection_name.clone(),
+                        vector: embedding,
+                        limit,
+                        with_payload: Some(true.into()),
+                        ..Default::default()
+                    })
+                    .await?;
 
-        let mut results = Vec::new();
-        for point in search_result.result {
-            if let Some(payload) = point.payload.get("text") {
-                // payload value is a qdrant Value, not direct string?
-                // qdrant_client Payload types convert nicely?
-                // PointStruct payload is HashMap<String, Value>.
-                // Value is qdrant_client::qdrant::Value (kind: string_value)
-                
-                // qdrant-client provides conversion helpers?
-                // `point.payload` is `HashMap<String, qdrant::Value>`.
-                // Checking how to extract string.
-                
-                // `point.payload["text"].kind` -> `Kind::StringValue(s)`
-                // But accessing nested enum is verbose.
-                // qdrant-client might interpret it.
-                
-                // Let's print debug if needed, but try standard way.
-                // Or verify qdrant crate docs (from memory).
-                // `Value` has `as_str()` helper? Maybe not.
-                
-                // Let's implement robust extraction helper logic in a bit if needed.
-                // For now, let's assume `to_string()` or similar works, or use `json!` conversion.
-                // Actually `serde_json::to_value` converts qdrant Value to serde Value.
-                
-                let json_val = serde_json::to_value(payload).unwrap_or_default();
-                if let Some(s) = json_val.as_str() {
-                    results.push(s.to_string());
+                let mut results = Vec::new();
+                for point in search_result.result {
+                    if let Some(payload) = point.payload.get("text") {
+                        let json_val = serde_json::to_value(payload).unwrap_or_default();
+                        if let Some(s) = json_val.as_str() {
+                            results.push(s.to_string());
+                        }
+                    }
                 }
+                Ok(results)
+            }
+            MemoryBackend::InMemory { data } => {
+                let guard = data.lock().await;
+                let results: Vec<String> = guard.iter()
+                    .filter(|(text, _)| text.to_lowercase().contains(&query.to_lowercase()))
+                    .map(|(text, _)| text.clone())
+                    .take(limit as usize)
+                    .collect();
+                Ok(results)
             }
         }
-        Ok(results)
     }
 }
