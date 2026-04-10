@@ -1,5 +1,8 @@
 # OpenClaw 🦞
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Rust](https://img.shields.io/badge/Rust-1.70+-orange.svg)](https://www.rust-lang.org)
+
 A powerful, multi-channel, autonomous AI agent gateway written in Rust. Port of the original [OpenClaw](https://github.com/openclaw/openclaw).
 
 ## ✨ Features
